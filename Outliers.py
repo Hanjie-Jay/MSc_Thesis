@@ -2,49 +2,49 @@ import numpy as np
 from scipy.stats import norm
 
 class OutlierInjector:
+    """
+    This class represents an Outlier Injector that is responsible for injecting outliers into
+    the dataset in to the place specified by outlier_position.
+
+    Attributes:
+        data : np.ndarray
+            The input original data to inject outliers.
+        n_sam_bef_cp : int
+            The number of samples before the change point, it is also the true change point position.
+        n_sam_aft_cp : int
+            The number of samples after the change point.
+        burnin : int
+            The number of initial observations to estimate the mean and variance of dataset.
+        in_control_var : float
+            The variance for in-control period of the streaming dataset.
+        out_control_mean : float
+            The mean for out-of-control period of the streaming dataset.
+        out_control_var : float
+            The variance for out-of-control period of the streaming dataset.
+        alpha : float
+            The threshold probability of occurrence for the outliers.
+        outlier_position : str
+            The position to insert outliers ('in-control', 'out-of-control', 'both_in_and_out', 'burn-in').
+        in_control_mean : float, optional
+            The mean for in-control period of the streaming dataset(default is 0).
+        outlier_ratio : float, optional
+            The ratio of total data points to be considered outliers (default is 0.01).
+
+    Methods:
+        calculate_thresholds():
+            Calculates the thresholds for outlier insertion for both in-control and out-of-control period.
+        insert_outliers():
+            Inserts the outliers into the data at the specified positions.
+        add_outliers(num_outliers, indices, lower_threshold, upper_threshold):
+            Adds a specific number of outliers at random positions within given indices for in-control or
+            out-of-control period.
+        add_outliers_for_both(num_outliers, indices, ic_lower_threshold, ic_upper_threshold, oc_lower_threshold, oc_upper_threshold):
+            Adds a specific number of outliers at random positions within given indices for both in-control and
+            out-of-control period.
+    """
     def __init__(self, data, n_sam_bef_cp:int, n_sam_aft_cp:int, burnin:int, in_control_var:float, 
                  out_control_mean:float, out_control_var:float, alpha:float, outlier_position:str,
                  in_control_mean:float=0, outlier_ratio:float=0.01):
-        """
-        This class represents an Outlier Injector that is responsible for injecting outliers into
-        the dataset in to the place specified by outlier_position.
-
-        Attributes:
-            data : np.ndarray
-                The input original data to inject outliers.
-            n_sam_bef_cp : int
-                The number of samples before the change point, it is also the true change point position.
-            n_sam_aft_cp : int
-                The number of samples after the change point.
-            burnin : int
-                The number of initial observations to estimate the mean and variance of dataset.
-            in_control_var : float
-                The variance for in-control period of the streaming dataset.
-            out_control_mean : float
-                The mean for out-of-control period of the streaming dataset.
-            out_control_var : float
-                The variance for out-of-control period of the streaming dataset.
-            alpha : float
-                The threshold probability of occurrence for the outliers.
-            outlier_position : str
-                The position to insert outliers ('in-control', 'out-of-control', 'both_in_and_out', 'burn-in').
-            in_control_mean : float, optional
-                The mean for in-control period of the streaming dataset(default is 0).
-            outlier_ratio : float, optional
-                The ratio of total data points to be considered outliers (default is 0.01).
-
-        Methods:
-            calculate_thresholds():
-                Calculates the thresholds for outlier insertion for both in-control and out-of-control period.
-            insert_outliers():
-                Inserts the outliers into the data at the specified positions.
-            add_outliers(num_outliers, indices, lower_threshold, upper_threshold):
-                Adds a specific number of outliers at random positions within given indices for in-control or
-                out-of-control period.
-            add_outliers_for_both(num_outliers, indices, ic_lower_threshold, ic_upper_threshold, oc_lower_threshold, oc_upper_threshold):
-                Adds a specific number of outliers at random positions within given indices for both in-control and
-                out-of-control period.
-        """
         # Define valid options
         valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
         assert isinstance(data, np.ndarray), "Data should be a numpy array."
@@ -104,23 +104,22 @@ class OutlierInjector:
         """
         num_outliers = int(self.outlier_ratio * (self.n_sam_bef_cp + self.n_sam_aft_cp))
         in_control_lower_threshold, in_control_upper_threshold, out_control_lower_threshold, out_control_upper_threshold = self.calculate_thresholds()
-        if self.outlier_position[0] == 'in-control':
+        if self.outlier_position == 'in-control':
             # specify indices for 'in-control' period
             in_control_indices = np.arange(self.burnin, self.n_sam_bef_cp)
             self.add_outliers(num_outliers, in_control_indices, in_control_lower_threshold, in_control_upper_threshold)
-            np.arange(50)
         
-        elif self.outlier_position[0] == 'out-of-control':
+        elif self.outlier_position == 'out-of-control':
             # specify indices for 'out-of-control' period
             out_of_control_indices = np.arange(self.n_sam_bef_cp, self.n_sam_aft_cp)
             self.add_outliers(num_outliers, out_of_control_indices, out_control_lower_threshold, out_control_upper_threshold)
 
-        elif self.outlier_position[0] == 'burn-in':
+        elif self.outlier_position == 'burn-in':
             # specify indices for 'burn-in' period
             burnin_indices = np.arange(self.burnin)
             self.add_outliers(num_outliers, burnin_indices, in_control_lower_threshold, in_control_upper_threshold)
         
-        elif self.outlier_position[0] == 'both_in_and_out':
+        elif self.outlier_position == 'both_in_and_out':
             # specify indices for 'both_in_and_out' period
             both_in_and_out_indices = np.arange(self.burnin,self.n_sam_bef_cp + self.n_sam_aft_cp)
             self.add_outliers_for_both(num_outliers, both_in_and_out_indices, in_control_lower_threshold, 
@@ -183,3 +182,4 @@ class OutlierInjector:
                     # Generate an upper outlier
                     outlier_value = oc_upper_threshold * np.random.uniform(1, 1.2)
             self.data[index] = outlier_value
+
