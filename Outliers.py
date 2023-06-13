@@ -7,28 +7,17 @@ class OutlierInjector:
     the dataset in to the place specified by outlier_position.
 
     Attributes:
-        data : np.ndarray
-            The input original data to inject outliers.
-        n_sam_bef_cp : int
-            The number of samples before the change point, it is also the true change point position.
-        n_sam_aft_cp : int
-            The number of samples after the change point.
-        burnin : int
-            The number of initial observations to estimate the mean and variance of dataset.
-        in_control_var : float
-            The variance for in-control period of the streaming dataset.
-        out_control_mean : float
-            The mean for out-of-control period of the streaming dataset.
-        out_control_var : float
-            The variance for out-of-control period of the streaming dataset.
-        alpha : float
-            The threshold probability of occurrence for the outliers.
-        outlier_position : str
-            The position to insert outliers ('in-control', 'out-of-control', 'both_in_and_out', 'burn-in').
-        in_control_mean : float, optional
-            The mean for in-control period of the streaming dataset(default is 0).
-        outlier_ratio : float, optional
-            The ratio of total data points to be considered outliers (default is 0.01).
+        data (np.ndarray): The input original data to inject outliers.
+        n_sam_bef_cp (int): The number of samples before the change point, it is also the true change point position.
+        n_sam_aft_cp (int): The number of samples after the change point.
+        burnin (int): The number of initial observations to estimate the mean and variance of dataset.
+        in_control_var (float): The variance for in-control period of the streaming dataset.
+        out_control_mean (float): The mean for out-of-control period of the streaming dataset.
+        out_control_var (float): The variance for out-of-control period of the streaming dataset.
+        alpha (float): The threshold probability of occurrence for the outliers.
+        outlier_position (str): The position to insert outliers ('in-control', 'out-of-control', 'both_in_and_out', 'burn-in').
+        in_control_mean (float, optional): The mean for in-control period of the streaming dataset(default is 0).
+        outlier_ratio (float, optional): The ratio of total data points to be considered outliers (default is 0.01, should be between (0,1)).
 
     Methods:
         calculate_thresholds():
@@ -56,7 +45,7 @@ class OutlierInjector:
         assert isinstance(out_control_var, (int, float)) and out_control_var >= 0, f"{out_control_var} should be a non-negative number (int or float)."
         assert isinstance(alpha, float) and 0 <= alpha <= 1, f"{alpha} should be a float between (0,1)."
         assert isinstance(in_control_mean, (int, float)), f"{in_control_mean} should be a number (int or float)."
-        assert isinstance(outlier_ratio, float) and 0 <= outlier_ratio <= 1, f"{outlier_ratio} should be a float between (0,1)."
+        assert isinstance(outlier_ratio, float) and 0 < outlier_ratio < 1, f"{outlier_ratio} should be a float between (0,1)."
         # Check user-provided input for outlier position
         if outlier_position is not None:
             if isinstance(outlier_position, str):

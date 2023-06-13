@@ -3,6 +3,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from ARLFunc import arl_cusum, arl_ewma
+from Outliers import OutlierInjector
 
 
 class GridDataEvaluate:
@@ -19,6 +20,9 @@ class GridDataEvaluate:
         burnin (int): Number of initial samples to discard in ARL calculation.
         cusum_params_list (list): List of parameter pairs (cusum_k, cusum_h) for the CUSUM model.
         ewma_params_list (list): List of parameter pairs (ewma_rho, ewma_k) for the EWMA model.
+        outlier_position (None or str): The position to insert outliers ('in-control', 'out-of-control', 'both_in_and_out', 'burn-in').
+        alpha (float, optional): The threshold probability of occurrence for the outliers (default is None, should between (0,1)).
+        outlier_ratio (float, optional): The ratio of total data points to be considered outliers (default is None, should be between (0,1)).
 
     Methods:
         generate_no_outlier_grid_data():
@@ -32,7 +36,8 @@ class GridDataEvaluate:
         plot_best_models():
             Plot function for best models of CUSUM and EWMA w.r.t. ARL0 and ARL1 values.
     """
-    def __init__(self, n_sam_bef_cp:int, n_sam_aft_cp:int, gap_sizes:list, variances:list,  seeds:list, burnin:int, cusum_params_list:list, ewma_params_list:list):
+    def __init__(self, n_sam_bef_cp:int, n_sam_aft_cp:int, gap_sizes:list, variances:list,  seeds:list, burnin:int, 
+                 cusum_params_list:list, ewma_params_list:list, outlier_position:str, alpha:float=None, outlier_ratio:float=None):
         assert isinstance(n_sam_bef_cp, int) and n_sam_bef_cp > 0, f"n_sam_bef_cp:{n_sam_bef_cp} must be a positive integer"
         assert isinstance(n_sam_aft_cp, int) and n_sam_aft_cp > 0, f"n_sam_aft_cp:{n_sam_aft_cp} must be a positive integer"
         assert isinstance(gap_sizes, (list, int, float)) and (all(isinstance(i, (int, float)) and i >= 0 for i in gap_sizes) if isinstance(gap_sizes, list) else gap_sizes >= 0), f"gap_sizes:{gap_sizes} must be a number or list of non-negetive numbers"
@@ -41,6 +46,16 @@ class GridDataEvaluate:
         assert isinstance(burnin, int) and burnin >= 0, f"burnin:{burnin} must be a non-negative integer"
         assert isinstance(cusum_params_list, list) and all(isinstance(i, tuple) and len(i)==2 for i in cusum_params_list), f"cusum_params_list:{cusum_params_list} must be a list of tuples each of size 2"
         assert isinstance(ewma_params_list, list) and all(isinstance(i, tuple) and len(i)==2 for i in ewma_params_list), f"ewma_params_list:{ewma_params_list} must be a list of tuples each of size 2"
+        assert outlier_position is None or isinstance(outlier_position, str), f"outlier_position:{outlier_position} must be either None or a string"
+        valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
+        if outlier_position is not None:
+            assert alpha is None or (isinstance(alpha, float) and 0 < alpha < 1), f"alpha:{alpha} must be a float within the range [0,1]"
+            assert outlier_ratio is None or (isinstance(outlier_ratio, float) and 0 < outlier_ratio < 1), f"outlier_ratio:{outlier_ratio} must be a float within the range (0,1)"
+            if isinstance(outlier_position, str):
+                if outlier_position not in valid_positions:
+                    raise ValueError(f"Invalid outlier position. Options are: {valid_positions}")
+            else:
+                raise TypeError("outlier_position should be only one of the valid string.")
         self.n_sam_bef_cp = n_sam_bef_cp
         self.n_sam_aft_cp = n_sam_aft_cp
         self.gap_sizes = gap_sizes
@@ -49,6 +64,9 @@ class GridDataEvaluate:
         self.burnin = burnin
         self.cusum_params_list = cusum_params_list
         self.ewma_params_list = ewma_params_list
+        self.outlier_position = outlier_position
+        self.alpha = alpha
+        self.outlier_ratio = outlier_ratio
 
     def generate_no_outlier_grid_data(self, seed:int):
         """
@@ -83,6 +101,50 @@ class GridDataEvaluate:
                 simulate_data_list.append((data_with_decrease, self.n_sam_bef_cp, - gap_size, variance))
         return simulate_data_list
 
+    def generate_with_outlier_grid_data(self, seed:int):
+        """
+        Generate a grid of different types of streaming data, including data with and without change points, 
+        different gap sizes, and variances. All streaming data starts with zero mean, and the variance is the same 
+        for the data stream before and after the change point. Outliers are also inserted into the data stream.
+
+        Parameters:
+        seed (int): The seed to control data generation.
+        alpha (float): The threshold probability of occurrence for the outliers.
+        outlier_ratio (float, optional): The ratio of total data points to be considered outliers (default is 0.01, should be between (0,1)).
+
+        Returns:
+        simulate_data_list (list): A list of tuples, each containing data and the corresponding true change point, 
+                                mean gap size, variance, and outlier indices.
+        """
+        assert isinstance(seed, int), f"seed:{seed} must be a integer"
+        # Check user-provided input for outlier position
+        simulate_data_list = []
+        np.random.seed(seed)
+        # Without change in mean but different variance
+        for variance in self.variances:
+            data_without_outliers = np.random.normal(scale=np.sqrt(variance),size=self.n_sam_bef_cp + self.n_sam_aft_cp)
+            outinj = OutlierInjector(data_without_outliers, self.n_sam_bef_cp, self.n_sam_aft_cp, self.burnin, variance, 0, variance, 
+                                    self.alpha, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position)
+            data_with_outliers = outinj.insert_outliers()
+            simulate_data_list.append((data_with_outliers, None, 0, variance, outinj.outlier_indices)) # extra list of outlier indices
+        # With increase/decrease in mean and different variance
+        for gap_size in self.gap_sizes:
+            for variance in self.variances:
+                # Mean increase
+                data_with_increase = np.append(np.random.normal(size=self.n_sam_bef_cp, scale=np.sqrt(variance)), 
+                                        np.random.normal(loc=gap_size, scale=np.sqrt(variance), size=self.n_sam_aft_cp))
+                outinj = OutlierInjector(data_with_increase, self.n_sam_bef_cp, self.n_sam_aft_cp, self.burnin, variance, gap_size, 
+                                    variance, self.alpha, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position)
+                data_with_increase_outliers = outinj.insert_outliers()
+                simulate_data_list.append((data_with_increase_outliers, self.n_sam_bef_cp, gap_size, variance, outinj.outlier_indices))
+                # Mean decrease
+                data_with_decrease = np.append(np.random.normal(size=self.n_sam_bef_cp, scale=np.sqrt(variance)), 
+                                        np.random.normal(loc=-gap_size, scale=np.sqrt(variance), size=self.n_sam_aft_cp))
+                outinj = OutlierInjector(data_with_decrease, self.n_sam_bef_cp, self.n_sam_aft_cp, self.burnin, variance, -gap_size, 
+                                    variance, self.alpha, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position)
+                data_with_decrease_outliers = outinj.insert_outliers()
+                simulate_data_list.append((data_with_decrease_outliers, self.n_sam_bef_cp, -gap_size, variance, outinj.outlier_indices))
+        return simulate_data_list
 
     def grid_params_eval(self):
         """
@@ -105,20 +167,34 @@ class GridDataEvaluate:
         """
         arl_values = []
         for seed in self.seeds:
-            simulate_data_list = self.generate_no_outlier_grid_data(seed) # simulate data
-            for data, true_cp, gap_size, variance in simulate_data_list:
-                for cusum_k, cusum_h in self.cusum_params_list:
-                    arl0, arl1 = arl_cusum(data, self.burnin, cusum_k, cusum_h, true_cp) # arl for cusum
-                    arl_values.append((f'CUSUM ({cusum_k},{cusum_h})', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed))
-                for ewma_rho, ewma_k in self.ewma_params_list:
-                    arl0, arl1 = arl_ewma(data, self.burnin, ewma_rho, ewma_k, true_cp) # arl for ewma
-                    arl_values.append((f'EWMA ({ewma_rho},{ewma_k})', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed))
+            if self.outlier_position is None:
+                simulate_data_list = self.generate_no_outlier_grid_data(seed) # simulate data
+                for data, true_cp, gap_size, variance in simulate_data_list:
+                    for cusum_k, cusum_h in self.cusum_params_list:
+                        arl0, arl1 = arl_cusum(data, self.burnin, cusum_k, cusum_h, true_cp) # arl for cusum
+                        arl_values.append((f'CUSUM ({cusum_k},{cusum_h})', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed))
+                    for ewma_rho, ewma_k in self.ewma_params_list:
+                        arl0, arl1 = arl_ewma(data, self.burnin, ewma_rho, ewma_k, true_cp) # arl for ewma
+                        arl_values.append((f'EWMA ({ewma_rho},{ewma_k})', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed))
+            else:
+                simulate_data_list = self.generate_with_outlier_grid_data(seed) # simulate data with outliers
+                for data, true_cp, gap_size, variance, outlier_ind in simulate_data_list:
+                    for cusum_k, cusum_h in self.cusum_params_list:
+                        arl0, arl1 = arl_cusum(data, self.burnin, cusum_k, cusum_h, true_cp) # arl for cusum
+                        arl_values.append((f'CUSUM ({cusum_k},{cusum_h})', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed, outlier_ind))
+                    for ewma_rho, ewma_k in self.ewma_params_list:
+                        arl0, arl1 = arl_ewma(data, self.burnin, ewma_rho, ewma_k, true_cp) # arl for ewma
+                        arl_values.append((f'EWMA ({ewma_rho},{ewma_k})', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed, outlier_ind))
+
         # transform the data into pandas dataframe and compute the mean and variance using groupby
-        performance_table = pd.DataFrame(arl_values, columns=['Model (Parameters)', f'Data (len:{self.n_sam_aft_cp+self.n_sam_bef_cp}, TCP:{self.n_sam_bef_cp})', 'ARL0', 'ARL1', 'seed'])
+        if self.outlier_position is None:
+            performance_table = pd.DataFrame(arl_values, columns=['Model (Parameters)', f'Data (len:{self.n_sam_aft_cp+self.n_sam_bef_cp}, TCP:{self.n_sam_bef_cp})', 'ARL0', 'ARL1', 'seed'])
+        else:
+            performance_table = pd.DataFrame(arl_values, columns=['Model (Parameters)', f'Data (len:{self.n_sam_aft_cp+self.n_sam_bef_cp}, TCP:{self.n_sam_bef_cp})', 'ARL0', 'ARL1', 'seed', 'outlier_ind'])
         performance_summary = performance_table.groupby([f'Data (len:{self.n_sam_aft_cp+self.n_sam_bef_cp}, TCP:{self.n_sam_bef_cp})',
                                                         'Model (Parameters)']).agg({'ARL0':['mean', 'std'], 'ARL1':['mean', 'std']}).reset_index()
         # extract gap size and variance from 'Data' column
-        performance_table[['Gap Size', 'Data Var']] = performance_table['Data (len:900, TCP:400)'].str.extract('MG:(-?\d+) Var:(\d+)')
+        performance_table[['Gap Size', 'Data Var']] = performance_table[f'Data (len:{self.n_sam_aft_cp+self.n_sam_bef_cp}, TCP:{self.n_sam_bef_cp})'].str.extract('MG:(-?\d+) Var:(\d+)')
         # Convert 'Gap Size' and 'Variance' to numeric
         performance_table['Gap Size'] = pd.to_numeric(performance_table['Gap Size'])
         performance_table['Data Var'] = pd.to_numeric(performance_table['Data Var'])
@@ -170,7 +246,10 @@ class GridDataEvaluate:
                 subset_df = per_table[per_table['Gap Size'] == gap_size]
                 plt.figure(figsize=(20, 10))
                 sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df)
-                plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size}')
+                if self.outlier_position is None:
+                    plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size}')
+                else:
+                    plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} with outliers in {self.outlier_position} period')
                 plt.ylabel('$ARL_0$')
                 plt.xlabel('Model (Parameters)')
                 plt.xticks(rotation=30)
@@ -183,7 +262,10 @@ class GridDataEvaluate:
                     subset_df = per_table[(per_table['Gap Size'] == gap_size) & (per_table['Data Var'] == vari)]
                     plt.figure(figsize=(20, 10))
                     sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df)
-                    plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} and Data Variance {vari}')
+                    if self.outlier_position is None:
+                        plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} and Data Variance {vari}')
+                    else:
+                        plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} and Data Variance {vari} with outliers in {self.outlier_position} period')
                     plt.ylabel('$ARL_0$')
                     plt.xlabel('Model (Parameters)')
                     plt.xticks(rotation=30)
@@ -193,14 +275,20 @@ class GridDataEvaluate:
         if all_CUSUM == True:
             plt.figure(figsize=(12, 8))
             sns.boxplot(data=cusum_table, x='Gap Size', y='ARL0', hue='Data Var')
-            plt.title('CUSUM Model')
+            if self.outlier_position is None:
+                plt.title('CUSUM Model')
+            else:
+                plt.title(f'CUSUM Model with outliers in {self.outlier_position} period')
             plt.show()
 
         # Create box plots for EWMA model
         if all_EWMA == True:
             plt.figure(figsize=(12, 8))
             sns.boxplot(data=ewma_table, x='Gap Size', y='ARL0', hue='Data Var')
-            plt.title('EWMA Model')
+            if self.outlier_position is None:
+                plt.title('EWMA Model')
+            else:
+                plt.title(f'EWMA Model with outliers in {self.outlier_position} period')
             plt.show()
 
         # Loop through each unique model parameters for CUSUM and create box plot
@@ -208,7 +296,10 @@ class GridDataEvaluate:
             for param in cusum_params:
                 plt.figure(figsize=(12, 8))
                 sns.boxplot(data=cusum_table[cusum_table['Model (Parameters)'] == param], x='Gap Size', y='ARL0', hue='Data Var')
-                plt.title(f'Model: {param}')
+                if self.outlier_position is None:
+                    plt.title(f'Model: {param}')
+                else:
+                    plt.title(f'Model: {param} with outliers in {self.outlier_position} period')
                 plt.show()
 
         # Loop through each unique model parameters for EWMA and create box plot
@@ -216,7 +307,10 @@ class GridDataEvaluate:
             for param in ewma_params:
                 plt.figure(figsize=(12, 8))
                 sns.boxplot(data=ewma_table[ewma_table['Model (Parameters)'] == param], x='Gap Size', y='ARL0', hue='Data Var')
-                plt.title(f'Model: {param}')
+                if self.outlier_position is None:
+                    plt.title(f'Model: {param}')
+                else:
+                    plt.title(f'Model: {param} with outliers in {self.outlier_position} period')
                 plt.show()
 
     def plot_ARL1_graphs(self, each_G:bool=False, each_G_V:bool=False, all_CUSUM:bool=False, each_CUSUM:bool=False, all_EWMA:bool=False, each_EWMA:bool=False):
@@ -263,7 +357,10 @@ class GridDataEvaluate:
                 subset_df = per_table[per_table['Gap Size'] == gap_size]
                 plt.figure(figsize=(20, 10))
                 sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df)
-                plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size}')
+                if self.outlier_position is None:
+                    plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size}')
+                else:
+                    plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} with outliers in {self.outlier_position} period')
                 plt.ylabel('$ARL_1$')
                 plt.xlabel('Model (Parameters)')
                 plt.xticks(rotation=30)
@@ -276,7 +373,10 @@ class GridDataEvaluate:
                     subset_df = per_table[(per_table['Gap Size'] == gap_size) & (per_table['Data Var'] == vari)]
                     plt.figure(figsize=(20, 10))
                     sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df)
-                    plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} and Data Variance {vari}')
+                    if self.outlier_position is None:
+                        plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} and Data Variance {vari}')
+                    else:
+                        plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} and Data Variance {vari} with outliers in {self.outlier_position} period')
                     plt.ylabel('$ARL_1$')
                     plt.xlabel('Model (Parameters)')
                     plt.xticks(rotation=30)
@@ -286,14 +386,21 @@ class GridDataEvaluate:
         if all_CUSUM == True:
             plt.figure(figsize=(12, 8))
             sns.boxplot(data=cusum_table, x='Gap Size', y='ARL1', hue='Data Var')
-            plt.title('CUSUM Model')
+            if self.outlier_position is None:
+                plt.title('CUSUM Model')
+            else:
+                plt.title(f'CUSUM Model with outliers in {self.outlier_position} period')
+
             plt.show()
 
         # Create box plots for EWMA model
         if all_EWMA == True:
             plt.figure(figsize=(12, 8))
             sns.boxplot(data=ewma_table, x='Gap Size', y='ARL1', hue='Data Var')
-            plt.title('EWMA Model')
+            if self.outlier_position is None:
+                plt.title(f'EWMA Model')
+            else:
+                plt.title(f'EWMA Model with outliers in {self.outlier_position} period')
             plt.show()
 
         # Loop through each unique model parameters for CUSUM and create box plot
@@ -301,7 +408,10 @@ class GridDataEvaluate:
             for param in cusum_params:
                 plt.figure(figsize=(12, 8))
                 sns.boxplot(data=cusum_table[cusum_table['Model (Parameters)'] == param], x='Gap Size', y='ARL1', hue='Data Var')
-                plt.title(f'Model: {param}')
+                if self.outlier_position is None:
+                    plt.title(f'Model: {param}')
+                else:
+                    plt.title(f'Model: {param} with outliers in {self.outlier_position} period')
                 plt.show()
 
         # Loop through each unique model parameters for EWMA and create box plot
@@ -309,7 +419,10 @@ class GridDataEvaluate:
             for param in ewma_params:
                 plt.figure(figsize=(12, 8))
                 sns.boxplot(data=ewma_table[ewma_table['Model (Parameters)'] == param], x='Gap Size', y='ARL1', hue='Data Var')
-                plt.title(f'Model: {param}')
+                if self.outlier_position is None:
+                    plt.title(f'Model: {param}')
+                else:
+                    plt.title(f'Model: {param} with outliers in {self.outlier_position} period')
                 plt.show()
 
     def plot_best_models(self):
@@ -382,7 +495,10 @@ class GridDataEvaluate:
         for i, txt in enumerate(best_arl0_ewmas['Model (Parameters)']):
             plt.annotate(txt, (x_arl0[i], best_arl0_ewmas[('ARL0', 'mean')].iloc[i]) + offsets_ewma, 
                         fontsize=10, color=color_ewma)
-        plt.title('Mean $ARL_0$ values of best CUSUM/EWMA model for different Gap Sizes')
+        if self.outlier_position is None:
+            plt.title('Mean $ARL_0$ values of best CUSUM/EWMA model for different Gap Sizes')
+        else:
+            plt.title(f'Mean $ARL_0$ values of best CUSUM/EWMA model for different Gap Sizes with outliers in {self.outlier_position} period')
         plt.xlabel('Gap Size')
         plt.ylabel('$ARL_0$ mean')
         plt.xticks(x_arl0, best_arl0_cusums['Gap Size'])
@@ -403,7 +519,10 @@ class GridDataEvaluate:
         for i, txt in enumerate(best_arl1_ewmas['Model (Parameters)']):
             plt.annotate(txt, (x_arl1[i], best_arl1_ewmas[('ARL1', 'mean')].iloc[i]) + offsets_ewma, 
                         fontsize=10, color=color_ewma)
-        plt.title('Mean $ARL_0$ values of best CUSUM/EWMA model for different Gap Sizes')
+        if self.outlier_position is None:
+            plt.title('Mean $ARL_0$ values of best CUSUM/EWMA model for different Gap Sizes')
+        else:
+            plt.title(f'Mean $ARL_0$ values of best CUSUM/EWMA model for different Gap Sizes with outliers in {self.outlier_position} period')
         plt.xlabel('Gap Size')
         plt.ylabel('$ARL_1$ mean')
         plt.xticks(x_arl1, best_arl1_cusums['Gap Size'])
