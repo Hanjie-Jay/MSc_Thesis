@@ -22,13 +22,15 @@ class GridDataEvaluate:
         ewma_params_list (list): List of parameter pairs (ewma_rho, ewma_k) for the EWMA model.
         outlier_position (None or str): The position to insert outliers ('in-control', 'out-of-control', 'both_in_and_out', 'burn-in').
         alpha (float, optional): The threshold probability of occurrence for the outliers (default is None, should between (0,1)).
-        outlier_ratio (float, optional): The ratio of total data points to be considered outliers (default is None, should be between (0,1)).
+        outlier_ratio (float, optional): The ratio of data points of the given outlier position period to be considered outliers (default is None, should be between (0,1)).
 
     Methods:
         generate_no_outlier_grid_data():
             Simulates grid data that have no outlier for the provided parameters.
+        generate_with_outliers_grid_data():
+            Simulates grid data that have outliers for the provided parameters.
         grid_params_eval():
-            Evaluates the performance of control charts with different parameters by calculating the ARL.
+            Evaluates the performance of control charts with different parameters by calculating the ARLs.
         plot_ARL0_graphs(each_G:bool, each_G_V:bool, all_CUSUM:bool, each_CUSUM:bool, all_EWMA:bool, each_EWMA:bool):
             Plots different types of box plots to visualize ARL0 values under various conditions.
         plot_ARL1_graphs():
@@ -101,7 +103,7 @@ class GridDataEvaluate:
                 simulate_data_list.append((data_with_decrease, self.n_sam_bef_cp, - gap_size, variance))
         return simulate_data_list
 
-    def generate_with_outlier_grid_data(self, seed:int):
+    def generate_with_outliers_grid_data(self, seed:int):
         """
         Generate a grid of different types of streaming data, including data with and without change points, 
         different gap sizes, and variances. All streaming data starts with zero mean, and the variance is the same 
@@ -109,8 +111,6 @@ class GridDataEvaluate:
 
         Parameters:
         seed (int): The seed to control data generation.
-        alpha (float): The threshold probability of occurrence for the outliers.
-        outlier_ratio (float, optional): The ratio of total data points to be considered outliers (default is 0.01, should be between (0,1)).
 
         Returns:
         simulate_data_list (list): A list of tuples, each containing data and the corresponding true change point, 
@@ -177,7 +177,7 @@ class GridDataEvaluate:
                         arl0, arl1 = arl_ewma(data, self.burnin, ewma_rho, ewma_k, true_cp) # arl for ewma
                         arl_values.append((f'EWMA ({ewma_rho},{ewma_k})', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed))
             else:
-                simulate_data_list = self.generate_with_outlier_grid_data(seed) # simulate data with outliers
+                simulate_data_list = self.generate_with_outliers_grid_data(seed) # simulate data with outliers
                 for data, true_cp, gap_size, variance, outlier_ind in simulate_data_list:
                     for cusum_k, cusum_h in self.cusum_params_list:
                         arl0, arl1 = arl_cusum(data, self.burnin, cusum_k, cusum_h, true_cp) # arl for cusum
@@ -542,12 +542,25 @@ class GridDataEvaluate:
 # BURNIN = 50
 # cusum_params_list = [(1.50, 1.61), (1.25, 1.99), (1.00, 2.52), (0.75, 3.34), (0.50, 4.77), (0.25, 8.01)]
 # ewma_params_list = [(1.00,3.090),(0.75,3.087),(0.50,3.071),(0.40,3.054),(0.30,3.023),(0.25,2.998),(0.20,2.962),(0.10,2.814),(0.05,2.615),(0.03,2.437)]
-# # simulate_data_list = generate_no_outlier_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
+# outlier_position = 'in-control'
+# alpha = 1e-5
+# outlier_ratio = 0.01
+# # Without outliers
 # grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, 
-#                                       seeds, BURNIN, cusum_params_list, ewma_params_list)
-
+#                             seeds, BURNIN, cusum_params_list, ewma_params_list, None)
 # per_table, per_summary = grideval.grid_params_eval()
 # per_summary
+# grideval.plot_ARL0_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
+# grideval.plot_ARL1_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
+# grideval.plot_best_models()
+# # For data with outliers
+# # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
+# grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, seeds, BURNIN,
+#                              cusum_params_list, ewma_params_list, outlier_position, alpha, outlier_ratio)
+# outlier_grid_data = grideval.generate_with_outliers_grid_data(111)
+# outlier_grid_data[0][0].shape
+# per_table, per_summary = grideval.grid_params_eval()
+# per_table.iloc[50]
 # grideval.plot_ARL0_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
 # grideval.plot_ARL1_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
 # grideval.plot_best_models()
