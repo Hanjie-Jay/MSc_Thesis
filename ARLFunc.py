@@ -62,7 +62,7 @@ def compute_arl1(alert_ind, true_cp, data_size):
             warnings.warn(f"No changepoint detected, ARL1 is set to be the length of out-of-control data:{data_size - true_cp}.")
     return arl1
 
-def arl_cusum(data, burnin:int, cusum_k, cusum_h, true_cp):
+def arl_cusum(data:np.ndarray, burnin:int, cusum_k:float, cusum_h:float, true_cp:int):
     """
     Generate the Average Run Length (ARL0 and ARL1) values of streaming data with control chart using CUSUM.
     This function is now limited to compute ARL for single change point data stream
@@ -81,6 +81,8 @@ def arl_cusum(data, burnin:int, cusum_k, cusum_h, true_cp):
     assert isinstance(data, np.ndarray), f"Input={data} must be a numpy array"
     assert isinstance(burnin, int) and burnin >=0, f"burnin ({burnin}) must be a non-negative integer"
     assert (true_cp is None or (isinstance(true_cp, int) and true_cp >=0)), f"true_cp ({true_cp}) must be a non-negative integer or None"
+    if true_cp is not None:
+        assert burnin < true_cp, f"Value of burnin:{burnin} should smaller than true_cp:{true_cp}"
     assert isinstance(cusum_k, (int, float)) and cusum_k > 0, f"cusum_k={cusum_k} must be a positive number"
     assert isinstance(cusum_h, (int, float)) and cusum_h > 0, f"cusum_h={cusum_h} must be a positive number"
     if burnin >= len(data):
@@ -96,7 +98,7 @@ def arl_cusum(data, burnin:int, cusum_k, cusum_h, true_cp):
     arl1 = compute_arl1(alert_ind, true_cp, len(data))
     return arl0, arl1
 
-def arl_ewma(data, burnin:int, ewma_rho, ewma_k, true_cp):
+def arl_ewma(data:np.ndarray, burnin:int, ewma_rho:float, ewma_k:float, true_cp:int):
     """
     Calculate the Average Run Length (ARL0 and ARL1) values of streaming data for an EWMA control chart.
     This function is now limited to compute ARL for single change point data stream
@@ -115,6 +117,8 @@ def arl_ewma(data, burnin:int, ewma_rho, ewma_k, true_cp):
     assert isinstance(data, np.ndarray), f"Input={data} must be a numpy array"
     assert isinstance(burnin, int) and burnin >=0, f"burnin ({burnin}) must be a non-negative integer"
     assert (true_cp is None or (isinstance(true_cp, int) and true_cp >=0)), f"true_cp ({true_cp}) must be a non-negative integer or None"
+    if true_cp is not None:
+        assert burnin < true_cp, f"Value of burnin:{burnin} should smaller than true_cp:{true_cp}"
     assert isinstance(ewma_rho, float) and 0 <= ewma_rho <= 1, f"ewma_rho={ewma_rho} must be a float in the range [0, 1]"
     assert isinstance(ewma_k, (int, float)) and ewma_k > 0, f"ewma_k={ewma_k} must be a positive number"
     if burnin >= len(data):

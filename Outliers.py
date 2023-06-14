@@ -41,7 +41,7 @@ class OutlierInjector:
         assert isinstance(n_sam_bef_cp, int), f"n_sam_bef_cp:{n_sam_bef_cp} should be an integer."
         assert isinstance(n_sam_aft_cp, int), f"n_sam_aft_cp:{n_sam_aft_cp} should be an integer."
         assert isinstance(burnin, int), f"burnin:{burnin} should be an integer."
-        assert burnin <= n_sam_bef_cp, f"Value of burnin:{burnin} should smaller than n_sam_bef_cp:{n_sam_bef_cp}"
+        assert burnin < n_sam_bef_cp, f"Value of burnin:{burnin} should smaller than n_sam_bef_cp:{n_sam_bef_cp}"
         assert isinstance(in_control_var, (int, float)) and in_control_var >= 0, f"{in_control_var} should be a non-negative number (int or float)."
         assert isinstance(out_control_mean, (int, float)), f"{out_control_mean} should be a number (int or float)."
         assert isinstance(out_control_var, (int, float)) and out_control_var >= 0, f"{out_control_var} should be a non-negative number (int or float)."
@@ -96,8 +96,8 @@ class OutlierInjector:
         lower_threshold (float): The lower threshold from which outliers will be drawn.
         upper_threshold (float): The upper threshold from which outliers will be drawn.
         """
-        assert len(indices) >= num_outliers, "Can't sample more outliers than available indices."
-        assert len(indices) > 0, "Indices array can't be empty."
+        assert len(indices) >= num_outliers, f"Can't sample more outliers ({num_outliers}) than available indices {indices}."
+        assert len(indices) > 0, f"Indices f{indices} array can't be empty."
         outlier_indices = np.random.choice(indices, num_outliers, replace=False)
         self.outlier_indices = np.sort(outlier_indices)
         for index in outlier_indices:

@@ -13,7 +13,7 @@ class GridDataEvaluate:
     
     Attributes:
         n_sam_bef_cp (int): Number of samples before the change point.
-        n_sam_aft_cp (int): Number of samples after the change point.
+        n_sam_fsgdahaft_cp (int): Number of samples after the change point.
         gap_sizes (list): List of mean gap sizes for data simulation.
         variances (list): List of variances for data simulation.
         seeds (list): List of seeds for random number generation in data simulation.
@@ -46,6 +46,7 @@ class GridDataEvaluate:
         assert isinstance(variances, (list, int, float)) and (all(isinstance(i, (int, float)) and i >= 0 for i in variances) if isinstance(variances, list) else variances >= 0), f"variances:{variances} must be a number or list of non-negetive numbers"
         assert isinstance(seeds, (list, int)) and (all(isinstance(i, int) for i in seeds) if isinstance(seeds, list) else seeds>=0), f"seeds:{seeds} must be a non-negative integer or list of non-negative integers"
         assert isinstance(burnin, int) and burnin >= 0, f"burnin:{burnin} must be a non-negative integer"
+        assert burnin < n_sam_bef_cp, f"Value of burnin:{burnin} should smaller than n_sam_bef_cp:{n_sam_bef_cp}"
         assert isinstance(cusum_params_list, list) and all(isinstance(i, tuple) and len(i)==2 for i in cusum_params_list), f"cusum_params_list:{cusum_params_list} must be a list of tuples each of size 2"
         assert isinstance(ewma_params_list, list) and all(isinstance(i, tuple) and len(i)==2 for i in ewma_params_list), f"ewma_params_list:{ewma_params_list} must be a list of tuples each of size 2"
         assert outlier_position is None or isinstance(outlier_position, str), f"outlier_position:{outlier_position} must be either None or a string"
