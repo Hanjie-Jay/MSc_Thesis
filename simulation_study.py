@@ -80,18 +80,17 @@ print(arl_ewma(data_5, BURNIN, EWMA_RHO, EWMA_K, true_cp=300))
 
 # ------------------Testing function for grid_params_eval function without outlier-------------------
 # Setup initial values
-n_sam_bef_cp = 400
-n_sam_aft_cp = 600
+n_sam_bef_cp = 500
+n_sam_aft_cp = 500
 gap_sizes = [1, 5, 10]
 variances = [1, 4, 9]
-seeds = [111, 222, 666, 999]
+seeds = [111, 222, 333, 666, 999]
 BURNIN = 50
 cusum_params_list = [(1.50, 1.61), (1.25, 1.99), (1.00, 2.52), (0.75, 3.34), (0.50, 4.77), (0.25, 8.01)]
 ewma_params_list = [(1.00,3.090),(0.75,3.087),(0.50,3.071),(0.40,3.054),(0.30,3.023),(0.25,2.998),(0.20,2.962),(0.10,2.814),(0.05,2.615),(0.03,2.437)]
 # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
 grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, 
                             seeds, BURNIN, cusum_params_list, ewma_params_list, None)
-
 per_table, per_summary = grideval.grid_params_eval()
 per_summary
 per_table
@@ -107,7 +106,7 @@ n_sam_bef_cp = 500
 n_sam_aft_cp = 500
 gap_sizes = [1, 5, 10]
 variances = [1, 4, 9]
-seeds = [111, 222, 666, 999]
+seeds = [111, 222, 333, 666, 999]
 BURNIN = 100
 cusum_params_list = [(1.50, 1.61), (1.25, 1.99), (1.00, 2.52), (0.75, 3.34), (0.50, 4.77), (0.25, 8.01)]
 ewma_params_list = [(1.00,3.090),(0.75,3.087),(0.50,3.071),(0.40,3.054),(0.30,3.023),(0.25,2.998),(0.20,2.962),(0.10,2.814),(0.05,2.615),(0.03,2.437)]
@@ -116,15 +115,15 @@ outlier_position = valid_positions[0]
 alpha = 1e-5
 outlier_ratio = 0.05
 # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
-grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, seeds, BURNIN,
+grideval_outliers = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, seeds, BURNIN,
                              cusum_params_list, ewma_params_list, outlier_position, alpha, outlier_ratio)
-outlier_grid_data = grideval.generate_with_outliers_grid_data(seeds[0])
+outlier_grid_data = grideval_outliers.generate_with_outliers_grid_data(seeds[0])
 outlier_grid_data[0][0].shape
-per_table, per_summary = grideval.grid_params_eval()
+per_table, per_summary = grideval_outliers.grid_params_eval()
 per_table.iloc[50]
-grideval.plot_ARL0_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
-grideval.plot_ARL1_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
-grideval.plot_best_models()
+grideval_outliers.plot_ARL0_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
+grideval_outliers.plot_ARL1_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
+grideval_outliers.plot_best_models()
 # ------------------End-------------------
 
 # -------------------testing for outliers class--------------------
