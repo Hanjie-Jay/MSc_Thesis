@@ -121,7 +121,7 @@ outlier_grid_data = grideval_outliers.generate_with_outliers_grid_data(seeds[0])
 outlier_grid_data[0][0].shape
 per_table, per_summary = grideval_outliers.grid_params_eval()
 per_table.iloc[50]
-grideval_outliers.plot_ARL0_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
+grideval_outliers.plot_ARL0_graphs(each_G=True, each_CUSUM=True, all_EWMA=True, each_G_V=True)
 grideval_outliers.plot_ARL1_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
 grideval_outliers.plot_best_models()
 # ------------------End-------------------

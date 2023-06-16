@@ -57,7 +57,8 @@ class OutlierInjector:
                 raise TypeError("outlier_position should be only one of the valid string.")
         else:
             raise ValueError("You must provide an outlier_position to add")
-        self.data = data
+        self.original_data = data
+        self.data = data.copy()
         self.n_sam_bef_cp = n_sam_bef_cp
         self.n_sam_aft_cp = n_sam_aft_cp
         self.burnin = burnin
@@ -186,15 +187,14 @@ class OutlierInjector:
         """
         Plotting function for visualising the original data and data with outliers
         """
-        out_data = np.copy(self.data)  # Copy of data with outliers
-        original_data = np.copy(self.data)  # Copy of original data
         plt.figure(figsize=(12, 6))
-        plt.plot(out_data, color='gold', label='Data with Outliers')
-        plt.plot(original_data, color="royalblue", label='Original Data')
-        plt.axvline(x=self.burnin, color='gray', linestyle=':', label="End of burn-in")
+        plt.plot(self.data, color='gold', label='Data with Outliers')
+        plt.plot(self.original_data, color="royalblue", label='Original Data')
+        plt.scatter(self.outlier_indices, self.data[self.outlier_indices], color='violet', zorder=3, label='Outliers')
+        plt.axvspan(0, self.burnin-1, facecolor='grey', alpha=0.25)
+        plt.axvline(x=self.burnin-1, color='gray', linestyle=':', label="End of burn-in")
         if self.in_control_mean != self.out_control_mean:
             plt.axvline(x=self.n_sam_bef_cp, color='firebrick', linestyle='--', label="True CP")
-        plt.scatter(self.outlier_indices, out_data[self.outlier_indices], color='violet', zorder=3, label='Outliers')
         plt.title(f'Comparison between Original Data and Data with Outliers in {self.outlier_position} period')
         plt.xlabel('Index')
         plt.ylabel('Value')
