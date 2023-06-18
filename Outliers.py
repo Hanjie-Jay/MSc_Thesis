@@ -15,10 +15,11 @@ class OutlierInjector:
         in_control_var (float): The variance for in-control period of the streaming dataset.
         out_control_mean (float): The mean for out-of-control period of the streaming dataset.
         out_control_var (float): The variance for out-of-control period of the streaming dataset.
-        alpha (float): The threshold probability of occurrence for the outliers.
+        alpha (float): The threshold probability of occurrence for the outliers, should be between [0,1].
         outlier_position (str): The position to insert outliers ('in-control', 'out-of-control', 'both_in_and_out', 'burn-in').
         outlier_ratio (float, optional): The ratio of data points of the given outlier position period to be considered outliers (default is 0.01, should be between (0,1)).
         in_control_mean (float, optional): The mean for in-control period of the streaming dataset(default is 0).
+        with asymmetric properties (float, optimal): The ratio for adding a asymmetric outliers above the mean (default is 0.01, should be between [0,1]).
 
     Methods:
         calculate_thresholds():
@@ -34,7 +35,7 @@ class OutlierInjector:
     """
     def __init__(self, data:np.ndarray, n_sam_bef_cp:int, n_sam_aft_cp:int, burnin:int, in_control_var:float, 
                  out_control_mean:float, out_control_var:float, alpha:float, outlier_position:str, 
-                 outlier_ratio:float=0.01, in_control_mean:float=0):
+                 outlier_ratio:float=0.01, in_control_mean:float=0, asymmetric_ratio:float=0.1):
         # Define valid options
         valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
         assert isinstance(data, np.ndarray), "Data should be a numpy array."
@@ -45,9 +46,10 @@ class OutlierInjector:
         assert isinstance(in_control_var, (int, float)) and in_control_var >= 0, f"{in_control_var} should be a non-negative number (int or float)."
         assert isinstance(out_control_mean, (int, float)), f"{out_control_mean} should be a number (int or float)."
         assert isinstance(out_control_var, (int, float)) and out_control_var >= 0, f"{out_control_var} should be a non-negative number (int or float)."
-        assert isinstance(alpha, float) and 0 <= alpha <= 1, f"{alpha} should be a float between (0,1)."
+        assert isinstance(alpha, float) and 0 <= alpha <= 1, f"{alpha} should be a float between [0,1]."
         assert isinstance(outlier_ratio, float) and 0 < outlier_ratio < 1, f"{outlier_ratio} should be a float between (0,1)."
         assert isinstance(in_control_mean, (int, float)), f"{in_control_mean} should be a number (int or float)."
+        assert isinstance(asymmetric_ratio, float) and 0 <= asymmetric_ratio <= 1, f"{asymmetric_ratio} should be a float between [0,1]."
         # Check user-provided input for outlier position
         if outlier_position is not None:
             if isinstance(outlier_position, str):
@@ -71,6 +73,7 @@ class OutlierInjector:
         self.alpha = alpha
         self.outlier_ratio = outlier_ratio
         self.outlier_position = outlier_position
+        self.asymmetric_ratio = asymmetric_ratio
         self.outlier_indices = []
 
     def calculate_thresholds(self):
@@ -102,8 +105,8 @@ class OutlierInjector:
         outlier_indices = np.random.choice(indices, num_outliers, replace=False)
         self.outlier_indices = np.sort(outlier_indices)
         for index in outlier_indices:
-            if np.random.random() < 0.5:
-                # Generate a lower outlier with prob=0.5
+            if np.random.random() < self.asymmetric_ratio:
+                # Generate a lower outlier with prob = asymmetric_ratio to have asymmetric properties
                 outlier_value = lower_threshold * np.random.uniform(1, 1.2)
             else:
                 # Generate an upper outlier
@@ -132,15 +135,15 @@ class OutlierInjector:
         for index in outlier_indices:
             # seperate the case for in-control or out-control
             if index < self.n_sam_bef_cp:
-                if np.random.random() < 0.5:
-                    # Generate a lower outlier with prob=0.5
+                if np.random.random() < self.asymmetric_ratio:
+                    # Generate a lower outlier with prob=asymmetric_ratio to have asymmetric properties
                     outlier_value = ic_lower_threshold * np.random.uniform(1, 1.2) # randomly generate more extreme value
                 else:
                     # Generate an upper outlier
                     outlier_value = ic_upper_threshold * np.random.uniform(1, 1.2)
             else:
-                if np.random.random() < 0.5:
-                    # Generate a lower outlier with prob=0.5
+                if np.random.random() < self.asymmetric_ratio:
+                    # Generate a lower outlier with prob=asymmetric_ratio to have asymmetric properties
                     outlier_value = oc_lower_threshold * np.random.uniform(1, 1.2)
                 else:
                     # Generate an upper outlier

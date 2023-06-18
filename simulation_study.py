@@ -134,11 +134,11 @@ burnin = 50
 gap_size = 5
 alpha = 0.001
 valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
-outlier_position = valid_positions[1]
+outlier_position = valid_positions[0]
 outlier_ratio = 0.05
 data_1 = np.append(np.random.normal(size=n_sam_bef_cp, scale=np.sqrt(variance)), 
                        np.random.normal(size=n_sam_aft_cp,loc=gap_size, scale=np.sqrt(variance)))
-outinj = OutlierInjector(data_1.copy() ,n_sam_bef_cp, n_sam_aft_cp, burnin, variance, 
+outinj = OutlierInjector(data_1 ,n_sam_bef_cp, n_sam_aft_cp, burnin, variance, 
                          gap_size, variance, alpha, outlier_position, outlier_ratio)
 out_data = outinj.insert_outliers()
 outinj.outlier_indices
