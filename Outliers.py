@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
@@ -32,6 +33,8 @@ class OutlierInjector:
             out-of-control period.
         insert_outliers():
             Inserts the outliers into the data at the specified positions.
+        plot_data():
+            Plotting function for visualising the original data and data with outliers.
     """
     def __init__(self, data:np.ndarray, n_sam_bef_cp:int, n_sam_aft_cp:int, burnin:int, in_control_var:float, 
                  out_control_mean:float, out_control_var:float, alpha:float, outlier_position:str, 
@@ -186,10 +189,20 @@ class OutlierInjector:
         self.num_outliers = num_outliers
         return self.data
     
-    def plot_data(self):
+    def plot_data(self, save:bool=False, dpi:int=500):
         """
         Plotting function for visualising the original data and data with outliers
+
+        Parameters:
+        save (bool): The save argument control whether we will save the plot
+        save_path (str, optional): The path (and filename) where the figure should be saved, default to be data_with_outliers.png.
+        dpi (int, optional): The resolution in dots per inch for saved figures (default to be 500).
         """
+        assert isinstance(save, bool), f"The save:{save} argument should be either True or False"
+        # assert isinstance(save_path, (str, type(None))), "save_path should be a string or None."
+        # if save_path is not None:
+        #     assert os.path.isdir(os.path.dirname(save_path)), "The directory of save_path does not exist."
+        assert isinstance(dpi, int) and dpi > 0, f"The dpi:{dpi} parameter must be a positive integer."
         plt.figure(figsize=(12, 6))
         plt.plot(self.data, color='gold', label='Data with Outliers')
         plt.plot(self.original_data, color="royalblue", label='Original Data')
@@ -202,7 +215,11 @@ class OutlierInjector:
         plt.xlabel('Index')
         plt.ylabel('Value')
         plt.legend()
+        if save:
+            save_path = os.path.join("Plots", f"Comp_outliers_in_{self.outlier_position}")
+            plt.savefig(save_path, dpi=dpi)
         plt.show()
+
 
 # -------------------testing for outliers class--------------------
 # n_sam_bef_cp = 500

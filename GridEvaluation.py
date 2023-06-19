@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -205,18 +206,20 @@ class GridDataEvaluate:
         self.performance_summary = performance_summary
         return performance_table, performance_summary.round(4) # 4 decimal places
 
-    def plot_ARL0_graphs(self, each_G:bool=False, each_G_V:bool=False, all_CUSUM:bool=False, each_CUSUM:bool=False, all_EWMA:bool=False, each_EWMA:bool=False):
+    def plot_ARL0_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_CUSUM:bool=True, each_CUSUM:bool=True, all_EWMA:bool=True, each_EWMA:bool=True, dpi:int=500):
         """
         This function creates different types of box plots to visualize ARL0 values for different conditions.
         
         Parameters:
-        each_G (bool): If True, the function will create a boxplot for each unique gap size.
-        each_G_V (bool): If True, the function will create a boxplot for each unique gap size and variance.
-        all_CUSUM (bool): If True, the function will create a boxplot for the CUSUM model.
-        each_CUSUM (bool): If True, the function will create a boxplot for each unique model parameter for CUSUM.
-        all_EWMA (bool): If True, the function will create a boxplot for the EWMA model.
-        each_EWMA (bool): If True, the function will create a boxplot for each unique model parameter for EWMA.
-        
+        save (bool, optional): If True, the function will save each plot to a sub-folder in the 'ARL_0_graphs' directory.
+        each_G (bool, optional): If True, the function will create a boxplot for each unique gap size.
+        each_G_V (bool, optional): If True, the function will create a boxplot for each unique gap size and variance.
+        all_CUSUM (bool, optional): If True, the function will create a boxplot for the CUSUM model.
+        each_CUSUM (bool, optional): If True, the function will create a boxplot for each unique model parameter for CUSUM.
+        all_EWMA (bool, optional): If True, the function will create a boxplot for the EWMA model.
+        each_EWMA (bool, optional): If True, the function will create a boxplot for each unique model parameter for EWMA.
+        dpi (int, optional): The resolution in dots per inch for saved figures (default to be 500).
+
         Returns:
         None: The function generates plots
         """
@@ -224,6 +227,7 @@ class GridDataEvaluate:
             self.grid_params_eval()
         per_table = self.performance_table
         # Assertions to validate input data types
+        assert isinstance(save, bool), f"The save:{save} parameter must be a boolean."
         assert isinstance(per_table, pd.DataFrame), "per_table must be a pandas DataFrame."
         assert isinstance(each_G, bool), f"each_G:{each_G} must be a boolean value."
         assert isinstance(each_G_V, bool), f"each_G_V:{each_G_V} must be a boolean value."
@@ -231,6 +235,7 @@ class GridDataEvaluate:
         assert isinstance(each_CUSUM, bool), f"each_CUSUM:{each_CUSUM} must be a boolean value."
         assert isinstance(all_EWMA, bool), f"all_EWMA:{all_EWMA} must be a boolean value."
         assert isinstance(each_EWMA, bool), f"each_EWMA:{each_EWMA} must be a boolean value."
+        assert isinstance(dpi, int) and dpi > 0, f"The dpi:{dpi} parameter must be a positive integer."
         # Separate CUSUM and EWMA rows
         cusum_table = per_table[per_table['Model (Parameters)'].str.contains('CUSUM')] # Select col that have CUSUM
         ewma_table = per_table[per_table['Model (Parameters)'].str.contains('EWMA')] # Select col that have EWMA
@@ -241,35 +246,57 @@ class GridDataEvaluate:
         sns.set_style("whitegrid")
         sns.set_palette("viridis")
 
+        if save:
+            base_dir = os.path.join("Plots", 'ARL_0_graphs')
+            os.makedirs(base_dir, exist_ok=True) # make the directory to save arl0 graphs
+
         # Create a boxplot for each gap size
         if each_G == True:
+            if save:
+                # Define the graph type directory name based on the current boxplot.
+                graph_type = 'each_gap_size'
+                graph_dir = os.path.join(base_dir, graph_type)
+                os.makedirs(graph_dir, exist_ok=True)
             for gap_size in per_table['Gap Size'].unique():
                 subset_df = per_table[per_table['Gap Size'] == gap_size]
                 plt.figure(figsize=(20, 10))
                 sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df)
                 if self.outlier_position is None:
-                    plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size}')
+                    plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size}', fontsize=20)
                 else:
-                    plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} with outliers in {self.outlier_position} period')
-                plt.ylabel('$ARL_0$')
-                plt.xlabel('Model (Parameters)')
+                    plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} with outliers in {self.outlier_position} period', fontsize=20)
+                plt.ylabel('$ARL_0$', fontsize=13)
+                plt.xlabel('Model (Parameters)', fontsize=14)
                 plt.xticks(rotation=30)
+                if save:
+                    # Define the filename based on the specific graph parameters.
+                    filename = f"arl0_gap_{gap_size}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
         # Create a boxplot for each gap size and variance size
         if each_G_V == True:
+            if save:
+                # Define the graph type directory name based on the current boxplot.
+                graph_type = 'each_gap_&_var'
+                graph_dir = os.path.join(base_dir, graph_type)
+                os.makedirs(graph_dir, exist_ok=True)
             for gap_size in per_table['Gap Size'].unique():
                 for vari in per_table['Data Var'].unique():
                     subset_df = per_table[(per_table['Gap Size'] == gap_size) & (per_table['Data Var'] == vari)]
                     plt.figure(figsize=(20, 10))
                     sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df)
                     if self.outlier_position is None:
-                        plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} and Data Variance {vari}')
+                        plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} and Data Variance {vari}', fontsize=20)
                     else:
-                        plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} and Data Variance {vari} with outliers in {self.outlier_position} period')
-                    plt.ylabel('$ARL_0$')
-                    plt.xlabel('Model (Parameters)')
+                        plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} and Data Variance {vari} with outliers in {self.outlier_position} period', fontsize=20)
+                    plt.ylabel('$ARL_0$', fontsize=13)
+                    plt.xlabel('Model (Parameters)', fontsize=14)
                     plt.xticks(rotation=30)
+                    if save:
+                        # Define the filename based on the specific graph parameters.
+                        filename = f"arl0_gap_{gap_size}_var{vari}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                     plt.show()
 
         # Create box plots for CUSUM model
@@ -280,6 +307,9 @@ class GridDataEvaluate:
                 plt.title('CUSUM Model')
             else:
                 plt.title(f'CUSUM Model with outliers in {self.outlier_position} period')
+            if save:
+                filename = f"arl0_all_cusum_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
             plt.show()
 
         # Create box plots for EWMA model
@@ -290,10 +320,18 @@ class GridDataEvaluate:
                 plt.title('EWMA Model')
             else:
                 plt.title(f'EWMA Model with outliers in {self.outlier_position} period')
+            if save:
+                filename = f"arl0_all_ewma_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
             plt.show()
 
         # Loop through each unique model parameters for CUSUM and create box plot
         if each_CUSUM == True:
+            if save:
+                # Define the graph type directory name based on the current boxplot.
+                graph_type = 'each_cusum_model'
+                graph_dir = os.path.join(base_dir, graph_type)
+                os.makedirs(graph_dir, exist_ok=True)
             for param in cusum_params:
                 plt.figure(figsize=(12, 8))
                 sns.boxplot(data=cusum_table[cusum_table['Model (Parameters)'] == param], x='Gap Size', y='ARL0', hue='Data Var')
@@ -301,10 +339,19 @@ class GridDataEvaluate:
                     plt.title(f'Model: {param}')
                 else:
                     plt.title(f'Model: {param} with outliers in {self.outlier_position} period')
+                if save:
+                    # Define the filename based on the specific graph parameters.
+                    filename = f"arl0_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
         # Loop through each unique model parameters for EWMA and create box plot
         if each_EWMA == True:
+            if save:
+                # Define the graph type directory name based on the current boxplot.
+                graph_type = 'each_ewma_model'
+                graph_dir = os.path.join(base_dir, graph_type)
+                os.makedirs(graph_dir, exist_ok=True)
             for param in ewma_params:
                 plt.figure(figsize=(12, 8))
                 sns.boxplot(data=ewma_table[ewma_table['Model (Parameters)'] == param], x='Gap Size', y='ARL0', hue='Data Var')
@@ -312,20 +359,26 @@ class GridDataEvaluate:
                     plt.title(f'Model: {param}')
                 else:
                     plt.title(f'Model: {param} with outliers in {self.outlier_position} period')
+                if save:
+                    # Define the filename based on the specific graph parameters.
+                    filename = f"arl0_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
-    def plot_ARL1_graphs(self, each_G:bool=False, each_G_V:bool=False, all_CUSUM:bool=False, each_CUSUM:bool=False, all_EWMA:bool=False, each_EWMA:bool=False):
+    def plot_ARL1_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_CUSUM:bool=True, each_CUSUM:bool=True, all_EWMA:bool=True, each_EWMA:bool=True, dpi:int=500):
         """
         This function creates different types of box plots to visualize ARL1 values for different conditions.
         
         Parameters:
-        each_G (bool): If True, the function will create a boxplot for each unique gap size.
-        each_G_V (bool): If True, the function will create a boxplot for each unique gap size and variance.
-        all_CUSUM (bool): If True, the function will create a boxplot for the CUSUM model.
-        each_CUSUM (bool): If True, the function will create a boxplot for each unique model parameter for CUSUM.
-        all_EWMA (bool): If True, the function will create a boxplot for the EWMA model.
-        each_EWMA (bool): If True, the function will create a boxplot for each unique model parameter for EWMA.
-        
+        save (bool, optional): If True, the function will save each plot to a sub-folder in the 'ARL_0_graphs' directory.
+        each_G (bool, optional): If True, the function will create a boxplot for each unique gap size.
+        each_G_V (bool, optional): If True, the function will create a boxplot for each unique gap size and variance.
+        all_CUSUM (bool, optional): If True, the function will create a boxplot for the CUSUM model.
+        each_CUSUM (bool, optional): If True, the function will create a boxplot for each unique model parameter for CUSUM.
+        all_EWMA (bool, optional): If True, the function will create a boxplot for the EWMA model.
+        each_EWMA (bool, optional): If True, the function will create a boxplot for each unique model parameter for EWMA.
+        dpi (int, optional): The resolution in dots per inch for saved figures (default to be 500).
+
         Returns:
         None: The function generates plots
         """
@@ -333,6 +386,7 @@ class GridDataEvaluate:
                 self.grid_params_eval()
         per_table = self.performance_table
         # Assertions to validate input data types
+        assert isinstance(save, bool), "The save parameter must be a boolean."
         assert isinstance(per_table, pd.DataFrame), "per_table must be a pandas DataFrame."
         assert isinstance(each_G, bool), f"each_G:{each_G} must be a boolean value."
         assert isinstance(each_G_V, bool), f"each_G_V:{each_G_V} must be a boolean value."
@@ -340,6 +394,7 @@ class GridDataEvaluate:
         assert isinstance(each_CUSUM, bool), f"each_CUSUM:{each_CUSUM} must be a boolean value."
         assert isinstance(all_EWMA, bool), f"all_EWMA:{all_EWMA} must be a boolean value."
         assert isinstance(each_EWMA, bool), f"each_EWMA:{each_EWMA} must be a boolean value."
+        assert isinstance(dpi, int) and dpi > 0, f"The dpi:{dpi} parameter must be a positive integer."
         # Remove the no change point data as it is meaningless
         per_table = per_table[per_table['Gap Size'] != 0]
         # Separate CUSUM and EWMA rows
@@ -352,35 +407,57 @@ class GridDataEvaluate:
         sns.set_style("whitegrid")
         sns.set_palette("viridis")
 
+        if save:
+            base_dir = os.path.join("Plots", 'ARL_1_graphs')
+            os.makedirs(base_dir, exist_ok=True) # make the directory to save arl1 graphs
+
         # Create a boxplot for each gap size
         if each_G == True:
+            if save:
+                # Define the graph type directory name based on the current boxplot.
+                graph_type = 'each_gap_size'
+                graph_dir = os.path.join(base_dir, graph_type)
+                os.makedirs(graph_dir, exist_ok=True)
             for gap_size in per_table['Gap Size'].unique():
                 subset_df = per_table[per_table['Gap Size'] == gap_size]
                 plt.figure(figsize=(20, 10))
                 sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df)
                 if self.outlier_position is None:
-                    plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size}')
+                    plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size}', fontsize=20)
                 else:
-                    plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} with outliers in {self.outlier_position} period')
-                plt.ylabel('$ARL_1$')
-                plt.xlabel('Model (Parameters)')
+                    plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} with outliers in {self.outlier_position} period', fontsize=20)
+                plt.ylabel('$ARL_1$', fontsize=14)
+                plt.xlabel('Model (Parameters)', fontsize=14)
                 plt.xticks(rotation=30)
+                if save:
+                    # Define the filename based on the specific graph parameters.
+                    filename = f"arl1_gap_{gap_size}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
         # Create a boxplot for each gap size and variance size
         if each_G_V == True:
+            if save:
+                # Define the graph type directory name based on the current boxplot.
+                graph_type = 'each_gap_&_var'
+                graph_dir = os.path.join(base_dir, graph_type)
+                os.makedirs(graph_dir, exist_ok=True)
             for gap_size in per_table['Gap Size'].unique():
                 for vari in per_table['Data Var'].unique():
                     subset_df = per_table[(per_table['Gap Size'] == gap_size) & (per_table['Data Var'] == vari)]
                     plt.figure(figsize=(20, 10))
                     sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df)
                     if self.outlier_position is None:
-                        plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} and Data Variance {vari}')
+                        plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} and Data Variance {vari}', fontsize=20)
                     else:
-                        plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} and Data Variance {vari} with outliers in {self.outlier_position} period')
-                    plt.ylabel('$ARL_1$')
-                    plt.xlabel('Model (Parameters)')
+                        plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} and Data Variance {vari} with outliers in {self.outlier_position} period', fontsize=20)
+                    plt.ylabel('$ARL_1$', fontsize=14)
+                    plt.xlabel('Model (Parameters)', fontsize=14)
                     plt.xticks(rotation=30)
+                    if save:
+                        # Define the filename based on the specific graph parameters.
+                        filename = f"arl1_gap_{gap_size}_var{vari}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                     plt.show()
 
         # Create box plots for CUSUM model
@@ -391,7 +468,9 @@ class GridDataEvaluate:
                 plt.title('CUSUM Model')
             else:
                 plt.title(f'CUSUM Model with outliers in {self.outlier_position} period')
-
+            if save:
+                filename = f"arl1_all_cusum_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
             plt.show()
 
         # Create box plots for EWMA model
@@ -402,10 +481,18 @@ class GridDataEvaluate:
                 plt.title(f'EWMA Model')
             else:
                 plt.title(f'EWMA Model with outliers in {self.outlier_position} period')
+            if save:
+                filename = f"arl1_all_ewma_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
             plt.show()
 
         # Loop through each unique model parameters for CUSUM and create box plot
         if each_CUSUM == True:
+            if save:
+                # Define the graph type directory name based on the current boxplot.
+                graph_type = 'each_cusum_model'
+                graph_dir = os.path.join(base_dir, graph_type)
+                os.makedirs(graph_dir, exist_ok=True)
             for param in cusum_params:
                 plt.figure(figsize=(12, 8))
                 sns.boxplot(data=cusum_table[cusum_table['Model (Parameters)'] == param], x='Gap Size', y='ARL1', hue='Data Var')
@@ -413,10 +500,19 @@ class GridDataEvaluate:
                     plt.title(f'Model: {param}')
                 else:
                     plt.title(f'Model: {param} with outliers in {self.outlier_position} period')
+                if save:
+                    # Define the filename based on the specific graph parameters.
+                    filename = f"arl1_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
         # Loop through each unique model parameters for EWMA and create box plot
         if each_EWMA == True:
+            if save:
+                # Define the graph type directory name based on the current boxplot.
+                graph_type = 'each_ewma_model'
+                graph_dir = os.path.join(base_dir, graph_type)
+                os.makedirs(graph_dir, exist_ok=True)
             for param in ewma_params:
                 plt.figure(figsize=(12, 8))
                 sns.boxplot(data=ewma_table[ewma_table['Model (Parameters)'] == param], x='Gap Size', y='ARL1', hue='Data Var')
@@ -424,12 +520,19 @@ class GridDataEvaluate:
                     plt.title(f'Model: {param}')
                 else:
                     plt.title(f'Model: {param} with outliers in {self.outlier_position} period')
+                if save:
+                    filename = f"arl1_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
-    def plot_best_models(self):
+    def plot_best_models(self, save:bool=False, dpi:int=500):
         """
         This function takes a pandas dataframe and plots the ARL0 and ARL1 values for the best CUSUM and EWMA models for each gap size.
         The dataframe should have the columns 'Gap Size' and 'Model (Parameters)' and also ('ARL0', 'mean'), ('ARL0', 'std'), ('ARL1', 'mean'), and ('ARL1', 'std').
+
+        Parameters:
+        save (bool, optional): If True, the function will save each plot to a sub-folder in the 'ARL_0_graphs' directory.
+        dpi (int, optional): The resolution in dots per inch for saved figures.
 
         Returns:
         None: The function generates plots
@@ -438,6 +541,8 @@ class GridDataEvaluate:
             self.grid_params_eval()
         per_table = self.performance_table
         # Assert that input is a pandas DataFrame
+        assert isinstance(save, bool), "The save parameter must be a boolean."
+        assert isinstance(dpi, int) and dpi > 0, f"The dpi:{dpi} parameter must be a positive integer."
         assert isinstance(per_table, pd.DataFrame), "Input per_table must be a pandas DataFrame."
         # Find the table that contains mean and std of ARL0 & ARL1 for each model and each gap size
         per_table = per_table.groupby([f'Gap Size','Model (Parameters)']).agg({'ARL0':['mean', 'std'], 
@@ -504,6 +609,9 @@ class GridDataEvaluate:
         plt.ylabel('$ARL_0$ mean')
         plt.xticks(x_arl0, best_arl0_cusums['Gap Size'])
         plt.legend()
+        if save:
+            save_path = os.path.join("Plots", f"mean_arl0_best_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png")
+            plt.savefig(save_path, dpi=dpi)
         plt.show()
 
         # Plot for ARL1 of the best models for different gap sizes
@@ -528,6 +636,9 @@ class GridDataEvaluate:
         plt.ylabel('$ARL_1$ mean')
         plt.xticks(x_arl1, best_arl1_cusums['Gap Size'])
         plt.legend()
+        if save:
+            save_path = os.path.join("Plots", f"mean_arl1_best_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png")
+            plt.savefig(save_path, dpi=dpi)
         plt.show()
 
 # ------------------Testing function-------------------
@@ -551,9 +662,9 @@ class GridDataEvaluate:
 #                             seeds, BURNIN, cusum_params_list, ewma_params_list, None)
 # per_table, per_summary = grideval.grid_params_eval()
 # per_summary
-# grideval.plot_ARL0_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
-# grideval.plot_ARL1_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
-# grideval.plot_best_models()
+# grideval.plot_ARL0_graphs(save=True, each_G=False, all_CUSUM=False, all_EWMA=False, each_G_V=False)
+# grideval.plot_ARL1_graphs(save=True, each_G=False, all_CUSUM=False, all_EWMA=False, each_G_V=False)
+# grideval.plot_best_models(save=True)
 # # For data with outliers
 # # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
 # grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, seeds, BURNIN,
@@ -562,9 +673,9 @@ class GridDataEvaluate:
 # outlier_grid_data[0][0].shape
 # per_table, per_summary = grideval.grid_params_eval()
 # per_table.iloc[50]
-# grideval.plot_ARL0_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
-# grideval.plot_ARL1_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
-# grideval.plot_best_models()
+# grideval_outliers.plot_ARL0_graphs(save=True, each_G=False, each_CUSUM=False, all_EWMA=False, each_G_V=False)
+# grideval_outliers.plot_ARL1_graphs(save=True,each_G=False, all_CUSUM=False, all_EWMA=False, each_G_V=False)
+# grideval_outliers.plot_best_models(save=True)
 # ------------------End-------------------
 
 

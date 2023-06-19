@@ -1,3 +1,4 @@
+import os
 import importlib
 import numpy as np
 import pandas as pd
@@ -94,9 +95,9 @@ grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances,
 per_table, per_summary = grideval.grid_params_eval()
 per_summary
 per_table
-grideval.plot_ARL0_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
-grideval.plot_ARL1_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
-grideval.plot_best_models()
+grideval.plot_ARL0_graphs(save=True, each_G=False, all_CUSUM=False, all_EWMA=False, each_G_V=False)
+grideval.plot_ARL1_graphs(save=True, each_G=False, all_CUSUM=False, all_EWMA=False, each_G_V=False)
+grideval.plot_best_models(save=True)
 # ------------------End-------------------
 
 
@@ -121,9 +122,9 @@ outlier_grid_data = grideval_outliers.generate_with_outliers_grid_data(seeds[0])
 outlier_grid_data[0][0].shape
 per_table, per_summary = grideval_outliers.grid_params_eval()
 per_table.iloc[50]
-grideval_outliers.plot_ARL0_graphs(each_G=True, each_CUSUM=True, all_EWMA=True, each_G_V=True)
-grideval_outliers.plot_ARL1_graphs(each_G=True, all_CUSUM=True, all_EWMA=True, each_G_V=True)
-grideval_outliers.plot_best_models()
+grideval_outliers.plot_ARL0_graphs(save=True, each_G=False, each_CUSUM=False, all_EWMA=False, each_G_V=False)
+grideval_outliers.plot_ARL1_graphs(save=True,each_G=False, all_CUSUM=False, all_EWMA=False, each_G_V=False)
+grideval_outliers.plot_best_models(save=True)
 # ------------------End-------------------
 
 # -------------------testing for outliers class--------------------
@@ -142,7 +143,7 @@ outinj = OutlierInjector(data_1 ,n_sam_bef_cp, n_sam_aft_cp, burnin, variance,
                          gap_size, variance, alpha, outlier_position, outlier_ratio)
 out_data = outinj.insert_outliers()
 outinj.outlier_indices
-outinj.plot_data()
+outinj.plot_data(save=True, dpi=600)
 outinj.num_outliers
 # ------------------End-------------------
 
