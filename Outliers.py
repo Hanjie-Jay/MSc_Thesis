@@ -20,7 +20,7 @@ class OutlierInjector:
         outlier_position (str): The position to insert outliers ('in-control', 'out-of-control', 'both_in_and_out', 'burn-in').
         outlier_ratio (float, optional): The ratio of data points of the given outlier position period to be considered outliers (default is 0.01, should be between (0,1)).
         in_control_mean (float, optional): The mean for in-control period of the streaming dataset(default is 0).
-        with asymmetric properties (float, optimal): The ratio for adding a asymmetric outliers above the mean (default is 0.01, should be between [0,1]).
+        asymmetric_ratio (float, optimal): The ratio for adding a asymmetric outliers above the mean (default is 0.1, should be between [0,1]).
 
     Methods:
         calculate_thresholds():
@@ -203,22 +203,24 @@ class OutlierInjector:
         # if save_path is not None:
         #     assert os.path.isdir(os.path.dirname(save_path)), "The directory of save_path does not exist."
         assert isinstance(dpi, int) and dpi > 0, f"The dpi:{dpi} parameter must be a positive integer."
-        plt.figure(figsize=(12, 6))
-        plt.plot(self.data, color='gold', label='Data with Outliers')
-        plt.plot(self.original_data, color="royalblue", label='Original Data')
-        plt.scatter(self.outlier_indices, self.data[self.outlier_indices], color='violet', zorder=3, label='Outliers')
-        plt.axvspan(0, self.burnin-1, facecolor='grey', alpha=0.25)
-        plt.axvline(x=self.burnin-1, color='gray', linestyle=':', label="End of burn-in")
+        plt.figure(figsize=(15, 7.5))
+        plt.plot(self.data, color='#0F8291', label='Data with Outliers') # Dark Teal 
+        plt.plot(self.original_data, color="#003E74", label='Original Data')  # Imperial Blue
+        plt.scatter(self.outlier_indices, self.data[self.outlier_indices], color='#00A0C8', zorder=3, label='Outliers')  # Pool Blue
+        plt.axvspan(0, self.burnin-1, facecolor='#373A36', alpha=0.25)  # Cool Grey
+        plt.axvline(x=self.burnin-1, color='#373A36', linestyle=':', label="End of Burn-in")  # Cool Grey
         if self.in_control_mean != self.out_control_mean:
-            plt.axvline(x=self.n_sam_bef_cp, color='firebrick', linestyle='--', label="True CP")
-        plt.title(f'Comparison between Original Data and Data with Outliers in {self.outlier_position} period')
-        plt.xlabel('Index')
-        plt.ylabel('Value')
-        plt.legend()
+            plt.axvline(x=self.n_sam_bef_cp, color='#DD2501', linestyle='--', label="Change Point")  # Red
+        plt.title(f'Comparison of Original Data and Data with Outliers in the {self.outlier_position} Period', fontsize=20)
+        plt.xlabel('Index', fontsize=14)
+        plt.ylabel('Value', fontsize=14)
+        plt.legend(fontsize=14)
         if save:
             save_path = os.path.join("Plots", f"Comp_outliers_in_{self.outlier_position}")
+            plt.tight_layout()
             plt.savefig(save_path, dpi=dpi)
         plt.show()
+
 
 
 # -------------------testing for outliers class--------------------

@@ -24,7 +24,8 @@ class GridDataEvaluate:
         outlier_position (None or str): The position to insert outliers ('in-control', 'out-of-control', 'both_in_and_out', 'burn-in').
         alpha (float, optional): The threshold probability of occurrence for the outliers (default is None, should between (0,1)).
         outlier_ratio (float, optional): The ratio of data points of the given outlier position period to be considered outliers (default is None, should be between (0,1)).
-
+        asymmetric_ratio (float, optimal): The ratio for adding a asymmetric outliers above the mean (default is 0.1, should be between [0,1]).
+        
     Methods:
         generate_no_outlier_grid_data():
             Simulates grid data that have no outlier for the provided parameters.
@@ -40,7 +41,8 @@ class GridDataEvaluate:
             Plot function for best models of CUSUM and EWMA w.r.t. ARL0 and ARL1 values.
     """
     def __init__(self, n_sam_bef_cp:int, n_sam_aft_cp:int, gap_sizes:list, variances:list,  seeds:list, burnin:int, 
-                 cusum_params_list:list, ewma_params_list:list, outlier_position:str, alpha:float=None, outlier_ratio:float=None):
+                 cusum_params_list:list, ewma_params_list:list, outlier_position:str, alpha:float=None, 
+                 outlier_ratio:float=None, asymmetric_ratio:float=0.1):
         assert isinstance(n_sam_bef_cp, int) and n_sam_bef_cp > 0, f"n_sam_bef_cp:{n_sam_bef_cp} must be a positive integer"
         assert isinstance(n_sam_aft_cp, int) and n_sam_aft_cp > 0, f"n_sam_aft_cp:{n_sam_aft_cp} must be a positive integer"
         assert isinstance(gap_sizes, (list, int, float)) and (all(isinstance(i, (int, float)) and i >= 0 for i in gap_sizes) if isinstance(gap_sizes, list) else gap_sizes >= 0), f"gap_sizes:{gap_sizes} must be a number or list of non-negetive numbers"
@@ -55,6 +57,7 @@ class GridDataEvaluate:
         if outlier_position is not None:
             assert alpha is None or (isinstance(alpha, float) and 0 < alpha < 1), f"alpha:{alpha} must be a float within the range [0,1]"
             assert outlier_ratio is None or (isinstance(outlier_ratio, float) and 0 < outlier_ratio < 1), f"outlier_ratio:{outlier_ratio} must be a float within the range (0,1)"
+            assert isinstance(asymmetric_ratio, float) and 0 <= asymmetric_ratio <= 1, f"{asymmetric_ratio} should be a float between [0,1]."
             if isinstance(outlier_position, str):
                 if outlier_position not in valid_positions:
                     raise ValueError(f"Invalid outlier position. Options are: {valid_positions}")
@@ -71,6 +74,7 @@ class GridDataEvaluate:
         self.outlier_position = outlier_position
         self.alpha = alpha
         self.outlier_ratio = outlier_ratio
+        self.asymmetric_ratio = asymmetric_ratio
 
     def generate_no_outlier_grid_data(self, seed:int):
         """
@@ -126,7 +130,8 @@ class GridDataEvaluate:
         for variance in self.variances:
             data_without_outliers = np.random.normal(scale=np.sqrt(variance),size=self.n_sam_bef_cp + self.n_sam_aft_cp)
             outinj = OutlierInjector(data_without_outliers, self.n_sam_bef_cp, self.n_sam_aft_cp, self.burnin, variance, 0, variance, 
-                                    self.alpha, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position)
+                                    self.alpha, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position,
+                                    asymmetric_ratio=self.asymmetric_ratio)
             data_with_outliers = outinj.insert_outliers()
             simulate_data_list.append((data_with_outliers, None, 0, variance, outinj.outlier_indices)) # extra list of outlier indices
         # With increase/decrease in mean and different variance
@@ -136,14 +141,16 @@ class GridDataEvaluate:
                 data_with_increase = np.append(np.random.normal(size=self.n_sam_bef_cp, scale=np.sqrt(variance)), 
                                         np.random.normal(loc=gap_size, scale=np.sqrt(variance), size=self.n_sam_aft_cp))
                 outinj = OutlierInjector(data_with_increase, self.n_sam_bef_cp, self.n_sam_aft_cp, self.burnin, variance, gap_size, 
-                                    variance, self.alpha, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position)
+                                    variance, self.alpha, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position,
+                                    asymmetric_ratio=self.asymmetric_ratio)
                 data_with_increase_outliers = outinj.insert_outliers()
                 simulate_data_list.append((data_with_increase_outliers, self.n_sam_bef_cp, gap_size, variance, outinj.outlier_indices))
                 # Mean decrease
                 data_with_decrease = np.append(np.random.normal(size=self.n_sam_bef_cp, scale=np.sqrt(variance)), 
                                         np.random.normal(loc=-gap_size, scale=np.sqrt(variance), size=self.n_sam_aft_cp))
                 outinj = OutlierInjector(data_with_decrease, self.n_sam_bef_cp, self.n_sam_aft_cp, self.burnin, variance, -gap_size, 
-                                    variance, self.alpha, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position)
+                                    variance, self.alpha, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position,
+                                    asymmetric_ratio=self.asymmetric_ratio)
                 data_with_decrease_outliers = outinj.insert_outliers()
                 simulate_data_list.append((data_with_decrease_outliers, self.n_sam_bef_cp, -gap_size, variance, outinj.outlier_indices))
         return simulate_data_list
@@ -243,8 +250,11 @@ class GridDataEvaluate:
         cusum_params = cusum_table['Model (Parameters)'].unique()
         ewma_params = ewma_table['Model (Parameters)'].unique()
         # Set style and palette
-        sns.set_style("whitegrid")
-        sns.set_palette("viridis")
+        sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
+        sns.color_palette("crest", as_cmap=True)
+        n_colors = len(cusum_params) + len(ewma_params) # the total number of unique parameters
+        colors = sns.color_palette("crest", n_colors=n_colors)
+        colors_each = sns.color_palette("crest", n_colors=len(self.variances))
 
         if save:
             base_dir = os.path.join("Plots", 'ARL_0_graphs')
@@ -259,18 +269,20 @@ class GridDataEvaluate:
                 os.makedirs(graph_dir, exist_ok=True)
             for gap_size in per_table['Gap Size'].unique():
                 subset_df = per_table[per_table['Gap Size'] == gap_size]
-                plt.figure(figsize=(20, 10))
-                sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df)
+                plt.figure(figsize=(20, 8))
+                ax =sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df, palette=colors)
+                ax.tick_params(labelsize=10)
                 if self.outlier_position is None:
-                    plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size}', fontsize=20)
+                    plt.title(f'Boxplot of $ARL_0$ for Various Models on Streaming Data with a Mean Gap Size of {gap_size} (No Outliers)', fontsize=18)
                 else:
-                    plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} with outliers in {self.outlier_position} period', fontsize=20)
+                    plt.title(f'Boxplot of $ARL_0$ for Various Models on Streaming Data with a Mean Gap Size of {gap_size} (Outliers in {self.outlier_position} Period)', fontsize=18)
                 plt.ylabel('$ARL_0$', fontsize=13)
                 plt.xlabel('Model (Parameters)', fontsize=14)
                 plt.xticks(rotation=30)
                 if save:
                     # Define the filename based on the specific graph parameters.
                     filename = f"arl0_gap_{gap_size}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.tight_layout()
                     plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
@@ -284,44 +296,56 @@ class GridDataEvaluate:
             for gap_size in per_table['Gap Size'].unique():
                 for vari in per_table['Data Var'].unique():
                     subset_df = per_table[(per_table['Gap Size'] == gap_size) & (per_table['Data Var'] == vari)]
-                    plt.figure(figsize=(20, 10))
-                    sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df)
+                    plt.figure(figsize=(20, 8))
+                    ax =sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df, palette=colors)
+                    ax.tick_params(labelsize=10)
                     if self.outlier_position is None:
-                        plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} and Data Variance {vari}', fontsize=20)
+                        plt.title(f'Boxplot of $ARL_0$ for Various Models on Streaming Data with a Mean Gap Size of {gap_size} and Data Variance of {vari} (No Outliers)', fontsize=18)
                     else:
-                        plt.title(f'Boxplot of $ARL_0$ for Gap Size {gap_size} and Data Variance {vari} with outliers in {self.outlier_position} period', fontsize=20)
+                        plt.title(f'Boxplot of $ARL_0$ for Various Models on Streaming Data with a Mean Gap Size of {gap_size}, Data Variance of {vari} (Outliers in {self.outlier_position} Period)', fontsize=18)
                     plt.ylabel('$ARL_0$', fontsize=13)
                     plt.xlabel('Model (Parameters)', fontsize=14)
                     plt.xticks(rotation=30)
                     if save:
                         # Define the filename based on the specific graph parameters.
                         filename = f"arl0_gap_{gap_size}_var{vari}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        plt.tight_layout()
                         plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                     plt.show()
 
         # Create box plots for CUSUM model
         if all_CUSUM == True:
-            plt.figure(figsize=(12, 8))
-            sns.boxplot(data=cusum_table, x='Gap Size', y='ARL0', hue='Data Var')
+            plt.figure(figsize=(14, 8))
+            ax =sns.boxplot(data=cusum_table, x='Gap Size', y='ARL0', hue='Data Var', palette=colors_each)
+            ax.legend(fontsize=14)
+            ax.tick_params(labelsize=14)
             if self.outlier_position is None:
-                plt.title('CUSUM Model')
+                plt.title('$ARL_0$ Values of All CUSUM Models in Streaming Data Without Outliers', fontsize=18)
             else:
-                plt.title(f'CUSUM Model with outliers in {self.outlier_position} period')
+                plt.title(f'$ARL_0$ Values of All CUSUM Models in Streaming Data with Outliers in {self.outlier_position} Period', fontsize=18)
+            plt.ylabel('$ARL_0$', fontsize=14)
+            plt.xlabel('Gap Size', fontsize=14)
             if save:
                 filename = f"arl0_all_cusum_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                plt.tight_layout()
                 plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
             plt.show()
 
         # Create box plots for EWMA model
         if all_EWMA == True:
-            plt.figure(figsize=(12, 8))
-            sns.boxplot(data=ewma_table, x='Gap Size', y='ARL0', hue='Data Var')
+            plt.figure(figsize=(14, 8))
+            ax =sns.boxplot(data=ewma_table, x='Gap Size', y='ARL0', hue='Data Var', palette=colors_each)
+            ax.legend(fontsize=14)
+            ax.tick_params(labelsize=14)
             if self.outlier_position is None:
-                plt.title('EWMA Model')
+                plt.title('$ARL_0$ Values of All EWMA Models in Streaming Data Without Outliers', fontsize=18)
             else:
-                plt.title(f'EWMA Model with outliers in {self.outlier_position} period')
+                plt.title(f'$ARL_0$ Values of All EWMA Models in Streaming Data with Outliers in {self.outlier_position} Period', fontsize=18)
+            plt.ylabel('$ARL_0$', fontsize=14)
+            plt.xlabel('Gap Size', fontsize=14)
             if save:
                 filename = f"arl0_all_ewma_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                plt.tight_layout()
                 plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
             plt.show()
 
@@ -333,15 +357,20 @@ class GridDataEvaluate:
                 graph_dir = os.path.join(base_dir, graph_type)
                 os.makedirs(graph_dir, exist_ok=True)
             for param in cusum_params:
-                plt.figure(figsize=(12, 8))
-                sns.boxplot(data=cusum_table[cusum_table['Model (Parameters)'] == param], x='Gap Size', y='ARL0', hue='Data Var')
+                plt.figure(figsize=(14, 8))
+                ax =sns.boxplot(data=cusum_table[cusum_table['Model (Parameters)'] == param], x='Gap Size', y='ARL0', hue='Data Var', palette=colors_each)
+                ax.legend(fontsize=14)
+                ax.tick_params(labelsize=14)
                 if self.outlier_position is None:
-                    plt.title(f'Model: {param}')
+                    plt.title(f'The Values of $ARL_0$ for Model {param} under Different Streaming Data Settings, Without Outliers', fontsize=16)
                 else:
-                    plt.title(f'Model: {param} with outliers in {self.outlier_position} period')
+                    plt.title(f'The Values of $ARL_0$ for Model {param} under Different Streaming Data Settings with Outliers in {self.outlier_position} period', fontsize=16)
+                plt.ylabel('$ARL_0$', fontsize=14)
+                plt.xlabel('Gap Size', fontsize=14)
                 if save:
                     # Define the filename based on the specific graph parameters.
                     filename = f"arl0_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.tight_layout()
                     plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
@@ -353,15 +382,20 @@ class GridDataEvaluate:
                 graph_dir = os.path.join(base_dir, graph_type)
                 os.makedirs(graph_dir, exist_ok=True)
             for param in ewma_params:
-                plt.figure(figsize=(12, 8))
-                sns.boxplot(data=ewma_table[ewma_table['Model (Parameters)'] == param], x='Gap Size', y='ARL0', hue='Data Var')
+                plt.figure(figsize=(14, 8))
+                ax =sns.boxplot(data=ewma_table[ewma_table['Model (Parameters)'] == param], x='Gap Size', y='ARL0', hue='Data Var', palette=colors_each)
+                ax.legend(fontsize=14)
+                ax.tick_params(labelsize=14)
                 if self.outlier_position is None:
-                    plt.title(f'Model: {param}')
+                    plt.title(f'The Values of $ARL_0$ for Model {param} under Different Streaming Data Settings, Without Outliers', fontsize=16)
                 else:
-                    plt.title(f'Model: {param} with outliers in {self.outlier_position} period')
+                    plt.title(f'The Values of $ARL_0$ for Model {param} under Different Streaming Data Settings with Outliers in {self.outlier_position} period', fontsize=16)
+                plt.ylabel('$ARL_0$', fontsize=14)
+                plt.xlabel('Gap Size', fontsize=14)
                 if save:
                     # Define the filename based on the specific graph parameters.
                     filename = f"arl0_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.tight_layout()
                     plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
@@ -404,8 +438,11 @@ class GridDataEvaluate:
         cusum_params = cusum_table['Model (Parameters)'].unique()
         ewma_params = ewma_table['Model (Parameters)'].unique()
         # Set style and palette
-        sns.set_style("whitegrid")
-        sns.set_palette("viridis")
+        sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
+        sns.color_palette("crest", as_cmap=True)
+        n_colors = len(cusum_params) + len(ewma_params) # the total number of unique parameters
+        colors = sns.color_palette("crest", n_colors=n_colors)
+        colors_each = sns.color_palette("crest", n_colors=len(self.variances))
 
         if save:
             base_dir = os.path.join("Plots", 'ARL_1_graphs')
@@ -420,18 +457,20 @@ class GridDataEvaluate:
                 os.makedirs(graph_dir, exist_ok=True)
             for gap_size in per_table['Gap Size'].unique():
                 subset_df = per_table[per_table['Gap Size'] == gap_size]
-                plt.figure(figsize=(20, 10))
-                sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df)
+                plt.figure(figsize=(20, 8))
+                ax =sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df, palette=colors)
+                ax.tick_params(labelsize=10)
                 if self.outlier_position is None:
-                    plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size}', fontsize=20)
+                    plt.title(f'Boxplot of $ARL_1$ for Various Models on Streaming Data with a Mean Gap Size of {gap_size} (No Outliers)', fontsize=18)
                 else:
-                    plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} with outliers in {self.outlier_position} period', fontsize=20)
+                    plt.title(f'Boxplot of $ARL_1$ for Various Models on Streaming Data with a Mean Gap Size of {gap_size} (Outliers in {self.outlier_position} Period)', fontsize=18)
                 plt.ylabel('$ARL_1$', fontsize=14)
                 plt.xlabel('Model (Parameters)', fontsize=14)
                 plt.xticks(rotation=30)
                 if save:
                     # Define the filename based on the specific graph parameters.
                     filename = f"arl1_gap_{gap_size}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.tight_layout()
                     plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
@@ -445,44 +484,56 @@ class GridDataEvaluate:
             for gap_size in per_table['Gap Size'].unique():
                 for vari in per_table['Data Var'].unique():
                     subset_df = per_table[(per_table['Gap Size'] == gap_size) & (per_table['Data Var'] == vari)]
-                    plt.figure(figsize=(20, 10))
-                    sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df)
+                    plt.figure(figsize=(20, 8))
+                    ax =sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df, palette=colors)
+                    ax.tick_params(labelsize=10)
                     if self.outlier_position is None:
-                        plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} and Data Variance {vari}', fontsize=20)
+                        plt.title(f'Boxplot of $ARL_1$ for Various Models on Streaming Data with a Mean Gap Size of {gap_size} and Data Variance of {vari} (No Outliers)', fontsize=18)
                     else:
-                        plt.title(f'Boxplot of $ARL_1$ for Gap Size {gap_size} and Data Variance {vari} with outliers in {self.outlier_position} period', fontsize=20)
+                        plt.title(f'Boxplot of $ARL_1$ for Various Models on Streaming Data with a Mean Gap Size of {gap_size}, Data Variance of {vari} (Outliers in {self.outlier_position} Period)', fontsize=18)
                     plt.ylabel('$ARL_1$', fontsize=14)
                     plt.xlabel('Model (Parameters)', fontsize=14)
                     plt.xticks(rotation=30)
                     if save:
                         # Define the filename based on the specific graph parameters.
                         filename = f"arl1_gap_{gap_size}_var{vari}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        plt.tight_layout()
                         plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                     plt.show()
 
         # Create box plots for CUSUM model
         if all_CUSUM == True:
-            plt.figure(figsize=(12, 8))
-            sns.boxplot(data=cusum_table, x='Gap Size', y='ARL1', hue='Data Var')
+            plt.figure(figsize=(14, 8))
+            ax =sns.boxplot(data=cusum_table, x='Gap Size', y='ARL1', hue='Data Var', palette=colors_each)
+            ax.legend(fontsize=14)
+            ax.tick_params(labelsize=14)
             if self.outlier_position is None:
-                plt.title('CUSUM Model')
+                plt.title(f'$ARL_1$ Values of All CUSUM Models in Streaming Data Without Outliers', fontsize=18)
             else:
-                plt.title(f'CUSUM Model with outliers in {self.outlier_position} period')
+                plt.title(f'$ARL_1$ Values of All CUSUM Models in Streaming Data with Outliers in {self.outlier_position} Period', fontsize=18)
+            plt.ylabel('$ARL_1$', fontsize=14)
+            plt.xlabel('Gap Size', fontsize=14)
             if save:
                 filename = f"arl1_all_cusum_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                plt.tight_layout()
                 plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
             plt.show()
 
         # Create box plots for EWMA model
         if all_EWMA == True:
-            plt.figure(figsize=(12, 8))
-            sns.boxplot(data=ewma_table, x='Gap Size', y='ARL1', hue='Data Var')
+            plt.figure(figsize=(14, 8))
+            ax =sns.boxplot(data=ewma_table, x='Gap Size', y='ARL1', hue='Data Var', palette=colors_each)
+            ax.legend(fontsize=14)
+            ax.tick_params(labelsize=14)
             if self.outlier_position is None:
-                plt.title(f'EWMA Model')
+                plt.title(f'$ARL_1$ Values of All EWMA Models in Streaming Data Without Outliers', fontsize=18)
             else:
-                plt.title(f'EWMA Model with outliers in {self.outlier_position} period')
+                plt.title(f'$ARL_1$ Values of All EWMA Models in Streaming Data with Outliers in {self.outlier_position} Period', fontsize=18)
+            plt.ylabel('$ARL_1$', fontsize=14)
+            plt.xlabel('Gap Size', fontsize=14)
             if save:
                 filename = f"arl1_all_ewma_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                plt.tight_layout()
                 plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
             plt.show()
 
@@ -494,15 +545,20 @@ class GridDataEvaluate:
                 graph_dir = os.path.join(base_dir, graph_type)
                 os.makedirs(graph_dir, exist_ok=True)
             for param in cusum_params:
-                plt.figure(figsize=(12, 8))
-                sns.boxplot(data=cusum_table[cusum_table['Model (Parameters)'] == param], x='Gap Size', y='ARL1', hue='Data Var')
+                plt.figure(figsize=(14, 8))
+                ax =sns.boxplot(data=cusum_table[cusum_table['Model (Parameters)'] == param], x='Gap Size', y='ARL1', hue='Data Var', palette=colors_each)
+                ax.legend(fontsize=14)
+                ax.tick_params(labelsize=14)
                 if self.outlier_position is None:
-                    plt.title(f'Model: {param}')
+                    plt.title(f'The Values of $ARL_1$ for Model {param} under Different Streaming Data Settings, Without Outliers', fontsize=16)
                 else:
-                    plt.title(f'Model: {param} with outliers in {self.outlier_position} period')
+                    plt.title(f'The Values of $ARL_1$ for Model {param} under Different Streaming Data Settings with Outliers in {self.outlier_position} period', fontsize=16)
+                plt.ylabel('$ARL_1$', fontsize=14)
+                plt.xlabel('Gap Size', fontsize=14)
                 if save:
                     # Define the filename based on the specific graph parameters.
                     filename = f"arl1_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.tight_layout()
                     plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
@@ -514,14 +570,19 @@ class GridDataEvaluate:
                 graph_dir = os.path.join(base_dir, graph_type)
                 os.makedirs(graph_dir, exist_ok=True)
             for param in ewma_params:
-                plt.figure(figsize=(12, 8))
-                sns.boxplot(data=ewma_table[ewma_table['Model (Parameters)'] == param], x='Gap Size', y='ARL1', hue='Data Var')
+                plt.figure(figsize=(14, 8))
+                ax =sns.boxplot(data=ewma_table[ewma_table['Model (Parameters)'] == param], x='Gap Size', y='ARL1', hue='Data Var', palette=colors_each)
+                ax.legend(fontsize=14)
+                ax.tick_params(labelsize=14)
                 if self.outlier_position is None:
-                    plt.title(f'Model: {param}')
+                    plt.title(f'The Values of $ARL_1$ for Model {param} under Different Streaming Data Settings, Without Outliers', fontsize=16)
                 else:
-                    plt.title(f'Model: {param} with outliers in {self.outlier_position} period')
+                    plt.title(f'The Values of $ARL_1$ for Model {param} under Different Streaming Data Settings with Outliers in {self.outlier_position} period', fontsize=16)
+                plt.ylabel('$ARL_1$', fontsize=14)
+                plt.xlabel('Gap Size', fontsize=14)
                 if save:
                     filename = f"arl1_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.tight_layout()
                     plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
@@ -584,100 +645,120 @@ class GridDataEvaluate:
         offsets_ewma = np.array([0.05, -1])  # adjust as needed
 
         # Define colors
-        color_cusum = 'royalblue'
-        color_ewma = 'tomato'
+        color_cusum = '#003E74' # Imeprial blue
+        color_ewma = '#379f9f' # Seaglass
 
         # Plot for ARL0 of the best models for different gap sizes
-        plt.figure(figsize=(10, 8))
+        plt.figure(figsize=(16, 8))
         # CUSUM ARL0
         plt.plot(x_arl0, best_arl0_cusums[('ARL0', 'mean')], 'o-', color=color_cusum, label='CUSUM')
         # Annotate with model parameters
         for i, txt in enumerate(best_arl0_cusums['Model (Parameters)']):
             plt.annotate(txt, (x_arl0[i], best_arl0_cusums[('ARL0', 'mean')].iloc[i]) + offsets_cusum, 
-                        fontsize=10, color=color_cusum)
+                        fontsize=12, color=color_cusum)
         # EWMA ARL0
         plt.plot(x_arl0, best_arl0_ewmas[('ARL0', 'mean')], 'x-', color=color_ewma, label='EWMA')
         # Annotate with model parameters
         for i, txt in enumerate(best_arl0_ewmas['Model (Parameters)']):
             plt.annotate(txt, (x_arl0[i], best_arl0_ewmas[('ARL0', 'mean')].iloc[i]) + offsets_ewma, 
-                        fontsize=10, color=color_ewma)
+                        fontsize=12, color=color_ewma)
         if self.outlier_position is None:
-            plt.title('Mean $ARL_0$ values of best CUSUM/EWMA model for different Gap Sizes')
+            plt.title('Mean $ARL_0$ of Optimal CUSUM/EWMA Models for Streaming Data Across Different Mean Gap Sizes (No Outliers)', fontsize=16)
         else:
-            plt.title(f'Mean $ARL_0$ values of best CUSUM/EWMA model for different Gap Sizes with outliers in {self.outlier_position} period')
-        plt.xlabel('Gap Size')
-        plt.ylabel('$ARL_0$ mean')
-        plt.xticks(x_arl0, best_arl0_cusums['Gap Size'])
-        plt.legend()
+            plt.title(f'Mean $ARL_0$ of Optimal CUSUM/EWMA Models for Streaming Data Across Different Mean Gap Sizes (Outliers Present in {self.outlier_position} Period)', fontsize=16)
+        plt.xlabel('Gap Size', fontsize=14)
+        plt.ylabel('$ARL_0$ mean', fontsize=14)
+        plt.xticks(x_arl0, best_arl0_cusums['Gap Size'], fontsize=14)
+        plt.yticks(fontsize=14) 
+        plt.legend(fontsize=14)
         if save:
             save_path = os.path.join("Plots", f"mean_arl0_best_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png")
+            plt.tight_layout()
             plt.savefig(save_path, dpi=dpi)
         plt.show()
 
         # Plot for ARL1 of the best models for different gap sizes
-        plt.figure(figsize=(10, 8))
+        plt.figure(figsize=(16, 8))
         # CUSUM ARL1
         plt.plot(x_arl1, best_arl1_cusums[('ARL1', 'mean')], 'o-', color=color_cusum, label='CUSUM')
         # Annotate with model parameters
         for i, txt in enumerate(best_arl1_cusums['Model (Parameters)']):
             plt.annotate(txt, (x_arl1[i], best_arl1_cusums[('ARL1', 'mean')].iloc[i]) + offsets_cusum, 
-                        fontsize=10, color=color_cusum)
+                        fontsize=12, color=color_cusum)
         # EWMA ARL1
         plt.plot(x_arl1, best_arl1_ewmas[('ARL1', 'mean')], 'x-', color=color_ewma, label='EWMA')
         # Annotate with model parameters
         for i, txt in enumerate(best_arl1_ewmas['Model (Parameters)']):
             plt.annotate(txt, (x_arl1[i], best_arl1_ewmas[('ARL1', 'mean')].iloc[i]) + offsets_ewma, 
-                        fontsize=10, color=color_ewma)
+                        fontsize=12, color=color_ewma)
         if self.outlier_position is None:
-            plt.title('Mean $ARL_0$ values of best CUSUM/EWMA model for different Gap Sizes')
+            plt.title('Mean $ARL_1$ of Optimal CUSUM/EWMA Models for Streaming Data Across Different Mean Gap Sizes (No Outliers)', fontsize=16)
         else:
-            plt.title(f'Mean $ARL_0$ values of best CUSUM/EWMA model for different Gap Sizes with outliers in {self.outlier_position} period')
-        plt.xlabel('Gap Size')
-        plt.ylabel('$ARL_1$ mean')
-        plt.xticks(x_arl1, best_arl1_cusums['Gap Size'])
-        plt.legend()
+            plt.title(f'Mean $ARL_1$ of Optimal CUSUM/EWMA Models for Streaming Data Across Different Mean Gap Sizes (Outliers Present in {self.outlier_position} Period)', fontsize=16)
+        plt.xlabel('Gap Size', fontsize=14)
+        plt.ylabel('$ARL_1$ mean', fontsize=14)
+        plt.xticks(x_arl1, best_arl1_cusums['Gap Size'], fontsize=14)
+        plt.yticks(fontsize=14) 
+        plt.legend(fontsize=14)
         if save:
             save_path = os.path.join("Plots", f"mean_arl1_best_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png")
+            plt.tight_layout()
             plt.savefig(save_path, dpi=dpi)
         plt.show()
 
-# ------------------Testing function-------------------
-# For displaying the full pd.df
+# ------------------Testing function for grid_params_eval function without outlier-------------------
+# # For displaying the full pd.df
 # pd.set_option('display.max_columns', None)
-# pd.set_option('display.max_rows', None)
-
-# n_sam_bef_cp = 400
-# n_sam_aft_cp = 500
+# pd.set_option('display.max_rows', 200)
+# # Setup initial values
+# n_sam_bef_cp = 500
+# n_sam_aft_cp = 400
 # gap_sizes = [1, 5, 10]
 # variances = [1, 4, 9]
-# seeds = [111, 666, 999]
-# BURNIN = 50
+# seeds = [111, 222, 333, 666, 999]
+# BURNIN = 100
 # cusum_params_list = [(1.50, 1.61), (1.25, 1.99), (1.00, 2.52), (0.75, 3.34), (0.50, 4.77), (0.25, 8.01)]
 # ewma_params_list = [(1.00,3.090),(0.75,3.087),(0.50,3.071),(0.40,3.054),(0.30,3.023),(0.25,2.998),(0.20,2.962),(0.10,2.814),(0.05,2.615),(0.03,2.437)]
-# outlier_position = 'in-control'
-# alpha = 1e-5
-# outlier_ratio = 0.01
-# # Without outliers
+# # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
 # grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, 
 #                             seeds, BURNIN, cusum_params_list, ewma_params_list, None)
 # per_table, per_summary = grideval.grid_params_eval()
+
 # per_summary
-# grideval.plot_ARL0_graphs(save=True, each_G=False, all_CUSUM=False, all_EWMA=False, each_G_V=False)
-# grideval.plot_ARL1_graphs(save=True, each_G=False, all_CUSUM=False, all_EWMA=False, each_G_V=False)
+# per_table
+
+# grideval.plot_ARL0_graphs(save=True)
+# grideval.plot_ARL1_graphs(save=True)
 # grideval.plot_best_models(save=True)
-# # For data with outliers
-# # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
-# grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, seeds, BURNIN,
-#                              cusum_params_list, ewma_params_list, outlier_position, alpha, outlier_ratio)
-# outlier_grid_data = grideval.generate_with_outliers_grid_data(111)
-# outlier_grid_data[0][0].shape
-# per_table, per_summary = grideval.grid_params_eval()
-# per_table.iloc[50]
-# grideval_outliers.plot_ARL0_graphs(save=True, each_G=False, each_CUSUM=False, all_EWMA=False, each_G_V=False)
-# grideval_outliers.plot_ARL1_graphs(save=True,each_G=False, all_CUSUM=False, all_EWMA=False, each_G_V=False)
-# grideval_outliers.plot_best_models(save=True)
 # ------------------End-------------------
 
+
+# -------------------testing for outliers generation in GridEvaluation class--------------------
+# # Setup initial values
+# n_sam_bef_cp = 500
+# n_sam_aft_cp = 400
+# gap_sizes = [1, 5, 10]
+# variances = [1, 4, 9]
+# seeds = [111, 222, 333, 666, 999]
+# BURNIN = 100
+# cusum_params_list = [(1.50, 1.61), (1.25, 1.99), (1.00, 2.52), (0.75, 3.34), (0.50, 4.77), (0.25, 8.01)]
+# ewma_params_list = [(1.00,3.090),(0.75,3.087),(0.50,3.071),(0.40,3.054),(0.30,3.023),(0.25,2.998),(0.20,2.962),(0.10,2.814),(0.05,2.615),(0.03,2.437)]
+# valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
+# outlier_position = valid_positions[0]
+# alpha = 1e-5
+# outlier_ratio = 0.05
+# asymmetric_ratio = 0.25
+# # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
+# grideval_outliers = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, seeds, BURNIN,
+#                              cusum_params_list, ewma_params_list, outlier_position, alpha, outlier_ratio, asymmetric_ratio)
+# per_table, per_summary = grideval_outliers.grid_params_eval()
+# grideval_outliers.plot_ARL0_graphs(save=True)
+# grideval_outliers.plot_ARL1_graphs(save=True)
+# grideval_outliers.plot_best_models(save=True)
+# outlier_grid_data = grideval_outliers.generate_with_outliers_grid_data(seeds[0])
+# outlier_grid_data[0][0].shape
+# per_table.iloc[50]
+# ------------------End-------------------
 
 def simulate_stream_data(v=50, G=50, D=50, M=5000, S=[0.25, 0.5, 1, 3], sigma=1, seed=666):
     """
@@ -755,10 +836,10 @@ def stream_data_plot(data_stream, tau_list, G=50):
         plt.annotate(f'$\\tau_{i+1}$', xy=(tau, min(data_stream)), xytext=(tau, min(data_stream)), 
                      arrowprops=dict(facecolor='black', shrink=0.05))
         plt.fill_betweenx([min(data_stream), max(data_stream)], tau+G, tau, color='gray', alpha=0.25)  # shadows the area of burn-in
-    plt.xlabel('Time')
-    plt.ylabel('Value')
-    plt.title('Stream Data with Changepoints')
-    plt.legend()
+    plt.xlabel('Time', fontsize=14)
+    plt.ylabel('Value', fontsize=14)
+    plt.title('Stream Data with Changepoints', fontsize=20)
+    plt.legend(fontsize=14)
     plt.show()
 
 # -------------------streaming data simulation with plot test code--------------------
