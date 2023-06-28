@@ -6,7 +6,7 @@ from scipy.stats import iqr
 
 class ControlChart:
     """
-    This class implements the CUSUM and EWMA control charts for the detection of changes in streaming data.
+    This class encapsulates a set of control chart methods used to detect changes in streaming data. These methods include both traditional and robust methods: the Cumulative Sum (CUSUM) control chart, the Exponentially Weighted Moving Average (EWMA) control chart, and robust methods that use a sequence of means calculated with the trimmed mean, winsorized mean, and cosine-tapered mean.
 
     Attributes:
         x (np.ndarray): The input streaming data. It's a fixed dataset, but the values are coming in a stream.
@@ -21,6 +21,24 @@ class ControlChart:
             Calculates the EWMA control chart statistic values and both upper and lower alerts for the data.
         ewma_detect(rho:float, k:float, mu:float, sigma:float) -> Optional[int]:
             Detects the first change point in the data using the EWMA method.
+        compute_robust_methods_mean_seq(window_length:int, trimmed_ratio:float, winsorized_ratio:float, cosine_ratio:float):
+            Computes the sequence of "means" of the data using four robust methods: sliding window median, trimmed mean, winsorized mean, and cosine-tapered mean. 
+        sliding_window_median_CI_val(z_val:float, h_val:float, mu:float, sigma:float):
+            Calculates upper and lower statistics and alerts using the sliding window median confidence interval method.
+        sliding_window_median_CI_detect(z_val:float, h_val:float, mu:float, sigma:float, burnin:int):
+            Detects the first point of change in the data using the sliding window median confidence interval method.
+        trimmed_mean_CI_val(z_val:float, h_val:float, mu:float, sigma:float):
+            Calculates upper and lower statistics and alerts using the trimmed mean confidence interval method.
+        trimmed_mean_CI_detect(z_val:float, h_val:float, mu:float, sigma:float, burnin:int):
+            Detects the first point of change in the data using the trimmed mean confidence interval method.
+        winsorized_mean_CI_val(z_val:float, h_val:float, mu:float, sigma:float):
+            Calculates upper and lower statistics and alerts using the winsorized mean confidence interval method.
+        winsorized_mean_CI_detect(z_val:float, h_val:float, mu:float, sigma:float, burnin:int):
+            Detects the first point of change in the data using the winsorized mean confidence interval method.
+        cosine_tapered_mean_CI_val(z_val:float, h_val:float, mu:float, sigma:float):
+            Calculates upper and lower statistics and alerts using the cosine tapered mean confidence interval method.
+        cosine_tapered_mean_CI_detect(z_val:float, h_val:float, mu:float, sigma:float, burnin:int):
+            Detects the first point of change in the data using the cosine tapered mean confidence interval method.
     """
 
     def __init__(self, x: np.ndarray):
@@ -219,6 +237,338 @@ class ControlChart:
         else:
             warnings.warn("No change point detected, detected index set to None")
         return ind
+    
+    def compute_robust_methods_mean_seq(self, window_length:int, trimmed_ratio:float, winsorized_ratio:float, cosine_ratio:float):
+        """
+        This function computes the sequence of means of the data using three robust methods: trimmed mean, winsorized mean, and cosine-tapered mean. 
+        It then stores these sequences in the instance variables `trimmed_mean`, `winsorized_mean`, and `cosine_tapered_mean`, respectively. 
+        It also computes the sliding window median of the data and stores it in the instance variable `sliding_window_median`.
+
+        Parameters:
+        window_length (int): The length of the sliding window for computing the median. Must be less than or equal to the number of observations.
+        trimmed_ratio (float): The proportion of values to trim from both ends for the trimmed mean calculation. Must be in the range [0,1].
+        winsorized_ratio (float): The proportion of values to replace from both ends for the winsorized mean calculation. Must be in the range [0,1].
+        cosine_ratio (float): The proportion of values to taper for the cosine-tapered mean calculation. Must be in the range [0,1].
+
+        Note:
+        This function should be called before any function that uses the instance variables `trimmed_mean`, `winsorized_mean`, `cosine_tapered_mean`, or `sliding_window_median`.
+
+        Raises:
+        AssertionError: If the input parameters are not in the expected formats or ranges.
+        """
+        assert isinstance(window_length, int) and window_length <= self.n, f"Window length={window_length} must be an integer less than or equal to the number of observations={self.n}"
+        assert isinstance(trimmed_ratio, float) and 0 <= trimmed_ratio <= 1, f"trimmed_ratio={trimmed_ratio} must be a float in the range [0, 1]"        
+        assert isinstance(winsorized_ratio, float) and 0 <= winsorized_ratio <= 1, f"winsorized_ratio={winsorized_ratio} must be a float in the range [0, 1]"        
+        assert isinstance(cosine_ratio, float) and 0 <= cosine_ratio <= 1, f"cosine_ratio={cosine_ratio} must be a float in the range [0, 1]"        
+        robust_method = RobustMethods(self.x.copy())
+        self._sliding_window_median = robust_method.sliding_window_median(window_length=window_length)
+        robust_mean_seq = robust_method.compute_mean_sequence(trimmed_ratio=trimmed_ratio, winsorized_ratio=winsorized_ratio, cosine_ratio=cosine_ratio)
+        self._trimmed_mean = robust_mean_seq['trimmed']
+        self._winsorized_mean = robust_mean_seq['winsorized']
+        self._cosine_tapered_mean = robust_mean_seq['cosine']
+
+    def sliding_window_median_CI_val(self, z_val:float, h_val:float, mu:float, sigma:float):
+        """
+        Function for calculating both upper and lower statistics and alert value using the sliding window median confidence interval method.
+        
+        Parameters:
+        z_val (float): The control parameter for deciding the width of confidence interval. It should be in the range (0, inf).
+        h_val (float): The control parameter for the alert function. It should be in the range (0, inf).
+        mu (float): The (estimated) mean of the data.
+        sigma (float): The (estimated) standard deviation of the data.
+        
+        Returns:
+        tuple: A tuple containing four np.arrays. 
+        s: Upper statistics value for upper alert.
+        t: Lower statistics value for lower alert.
+        au: array indicating whether an upper alert is triggered at each point.
+        al: array indicating whether a lower alert is triggered at each point.
+        """
+        assert isinstance(z_val, (int, float)) and z_val > 0, f"z_val={z_val} must be a positive number"
+        assert isinstance(h_val, (int, float)) and h_val > 0, f"h_val={h_val} must be a positive number"
+        assert isinstance(mu, (int, float)), f"Mean mu={mu} must be an int or float type"
+        assert isinstance(sigma, (int, float)) and sigma >= 0, f"standard deviation sigma={sigma} must be a non-negative number"
+        if not hasattr(self, '_sliding_window_median'):
+            raise ValueError("Must run compute_robust_methods_mean_seq() before calling sliding_window_median_CI_val()")
+        ## Vectors for control chart statistics and alerts
+        s = np.zeros(self.n)
+        t = np.zeros(self.n)
+        au = np.zeros(self.n)
+        al = np.zeros(self.n)
+        s[0] = mu
+        t[0] = mu
+        au[0] = int(s[0] > mu + h_val)
+        al[0] = int(t[0] < mu - h_val)
+        ## Update control chart, alerts and variance
+        for i in range(1, self.n):
+            s[i] = self._sliding_window_median[i-1] + z_val * sigma / np.sqrt(i)
+            t[i] = self._sliding_window_median[i-1] - z_val * sigma / np.sqrt(i)
+            au[i] = int(s[i] > (mu + h_val)) # detect increase
+            al[i] = int(t[i] < (mu - h_val)) # detect decrease
+        ## Return final upper and lower statistics and alerts
+        return s, t, au, al
+
+    def sliding_window_median_CI_detect(self, z_val:float, h_val:float, mu:float, sigma:float, burnin:int):
+        """
+        Detects the first point of change in the data using the sliding window median confidence interval method.
+
+        Parameters:
+        z_val (float): The control parameter for deciding the width of confidence interval. It should be in the range (0, inf).
+        h_val (float): The control parameter for the alert function. It should be in the range (0, inf).
+        mu (float): The (estimated) mean of the data.
+        sigma (float): The (estimated) standard deviation of the data.
+        burnin (int): The number of examples used for burn-in to estimate the mean and variance.
+
+        Returns:
+        int or None: The index of the first detected alert, or None if no alert is detected.
+
+        Raises:
+        AssertionError: If any of the input parameters are not of the expected type or violate the constraints.
+        """
+        assert isinstance(z_val, (int, float)) and z_val > 0, f"z_val={z_val} must be a positive number"
+        assert isinstance(h_val, (int, float)) and h_val > 0, f"h_val={h_val} must be a positive number"
+        assert isinstance(mu, (int, float)), f"Mean mu={mu} must be an int or float type"
+        assert isinstance(sigma, (int, float)) and sigma >= 0, f"standard deviation sigma={sigma} must be a non-negative number"
+        assert isinstance(burnin, int) and burnin >= 0, f"burnin={burnin} should be a non-negative value"
+        if not hasattr(self, '_sliding_window_median'):
+            raise ValueError("Must run compute_robust_methods_mean_seq() before calling sliding_window_median_CI_detect()")
+        # compute the statistics value for cumsum
+        _, _, au, al = self.sliding_window_median_CI_val(z_val, h_val, mu, sigma)
+        # return the detected the alert
+        ind = self.__check_alerts(au, al) 
+        if ind is not None:
+            ind += burnin 
+        else:
+            warnings.warn("No change point detected, detected index set to None")
+        return ind
+    
+    def trimmed_mean_CI_val(self, z_val:float, h_val:float, mu:float, sigma:float):
+        """
+        Function for calculating both upper and lower statistics and alert value using the trimmed mean confidence interval method.
+        
+        Parameters:
+        z_val (float): The control parameter for deciding the width of confidence interval. It should be in the range (0, inf).
+        h_val (float): The control parameter for the alert function. It should be in the range (0, inf).
+        mu (float): The (estimated) mean of the data.
+        sigma (float): The (estimated) standard deviation of the data.
+        
+        Returns:
+        tuple: A tuple containing four np.arrays. 
+        s: Upper statistics value for upper alert.
+        t: Lower statistics value for lower alert.
+        au: array indicating whether an upper alert is triggered at each point.
+        al: array indicating whether a lower alert is triggered at each point.
+        """
+        assert isinstance(z_val, (int, float)) and z_val > 0, f"z_val={z_val} must be a positive number"
+        assert isinstance(h_val, (int, float)) and h_val > 0, f"h_val={h_val} must be a positive number"
+        assert isinstance(mu, (int, float)), f"Mean mu={mu} must be an int or float type"
+        assert isinstance(sigma, (int, float)) and sigma >= 0, f"standard deviation sigma={sigma} must be a non-negative number"
+        if not hasattr(self, '_trimmed_mean'):
+            raise ValueError("Must run compute_robust_methods_mean_seq() before calling trimmed_mean_CI_val()")
+        ## Vectors for control chart statistics and alerts
+        s = np.zeros(self.n)
+        t = np.zeros(self.n)
+        au = np.zeros(self.n)
+        al = np.zeros(self.n)
+        s[0] = mu
+        t[0] = mu
+        au[0] = int(s[0] > mu + h_val)
+        al[0] = int(t[0] < mu - h_val)
+        ## Update control chart, alerts and variance
+        for i in range(1, self.n):
+            s[i] = self._trimmed_mean[i-1] + z_val * sigma / np.sqrt(i)
+            t[i] = self._trimmed_mean[i-1] - z_val * sigma / np.sqrt(i)
+            au[i] = int(s[i] > (mu + h_val)) # detect increase
+            al[i] = int(t[i] < (mu - h_val)) # detect decrease
+        ## Return final upper and lower statistics and alerts
+        return s, t, au, al
+
+    def trimmed_mean_CI_detect(self, z_val:float, h_val:float, mu:float, sigma:float, burnin:int):
+        """
+        Detects the first point of change in the data using the trimmed mean confidence interval method.
+
+        Parameters:
+        z_val (float): The control parameter for deciding the width of confidence interval. It should be in the range (0, inf).
+        h_val (float): The control parameter for the alert function. It should be in the range (0, inf).
+        mu (float): The (estimated) mean of the data.
+        sigma (float): The (estimated) standard deviation of the data.
+        burnin (int): The number of examples used for burn-in to estimate the mean and variance.
+
+        Returns:
+        int or None: The index of the first detected alert, or None if no alert is detected.
+
+        Raises:
+        AssertionError: If any of the input parameters are not of the expected type or violate the constraints.
+        """
+        assert isinstance(z_val, (int, float)) and z_val > 0, f"z_val={z_val} must be a positive number"
+        assert isinstance(h_val, (int, float)) and h_val > 0, f"h_val={h_val} must be a positive number"
+        assert isinstance(mu, (int, float)), f"Mean mu={mu} must be an int or float type"
+        assert isinstance(sigma, (int, float)) and sigma >= 0, f"standard deviation sigma={sigma} must be a non-negative number"
+        assert isinstance(burnin, int) and burnin >= 0, f"burnin={burnin} should be a non-negative value"
+        if not hasattr(self, '_trimmed_mean'):
+            raise ValueError("Must run compute_robust_methods_mean_seq() before calling trimmed_mean_CI_detect()")
+        # compute the statistics value for cumsum
+        _, _, au, al = self.trimmed_mean_CI_val(z_val, h_val, mu, sigma)
+        # return the detected the alert
+        ind = self.__check_alerts(au, al) 
+        if ind is not None:
+            ind += burnin 
+        else:
+            warnings.warn("No change point detected, detected index set to None")
+        return ind
+    
+    def winsorized_mean_CI_val(self, z_val:float, h_val:float, mu:float, sigma:float):
+        """
+        Function for calculating both upper and lower statistics and alert value using the winsorized mean confidence interval method.
+        
+        Parameters:
+        z_val (float): The control parameter for deciding the width of confidence interval. It should be in the range (0, inf).
+        h_val (float): The control parameter for the alert function. It should be in the range (0, inf).
+        mu (float): The (estimated) mean of the data.
+        sigma (float): The (estimated) standard deviation of the data.
+        
+        Returns:
+        tuple: A tuple containing four np.arrays. 
+        s: Upper statistics value for upper alert.
+        t: Lower statistics value for lower alert.
+        au: array indicating whether an upper alert is triggered at each point.
+        al: array indicating whether a lower alert is triggered at each point.
+        """
+        assert isinstance(z_val, (int, float)) and z_val > 0, f"z_val={z_val} must be a positive number"
+        assert isinstance(h_val, (int, float)) and h_val > 0, f"h_val={h_val} must be a positive number"
+        assert isinstance(mu, (int, float)), f"Mean mu={mu} must be an int or float type"
+        assert isinstance(sigma, (int, float)) and sigma >= 0, f"standard deviation sigma={sigma} must be a non-negative number"
+        if not hasattr(self, '_winsorized_mean'):
+            raise ValueError("Must run compute_robust_methods_mean_seq() before calling winsorized_mean_CI_val()")
+        ## Vectors for control chart statistics and alerts
+        s = np.zeros(self.n)
+        t = np.zeros(self.n)
+        au = np.zeros(self.n)
+        al = np.zeros(self.n)
+        s[0] = mu
+        t[0] = mu
+        au[0] = int(s[0] > mu + h_val)
+        al[0] = int(t[0] < mu - h_val)
+        ## Update control chart, alerts and variance
+        for i in range(1, self.n):
+            s[i] = self._winsorized_mean[i-1] + z_val * sigma / np.sqrt(i)
+            t[i] = self._winsorized_mean[i-1] - z_val * sigma / np.sqrt(i)
+            au[i] = int(s[i] > (mu + h_val)) # detect increase
+            al[i] = int(t[i] < (mu - h_val)) # detect decrease
+        ## Return final upper and lower statistics and alerts
+        return s, t, au, al
+
+    def winsorized_mean_CI_detect(self, z_val:float, h_val:float, mu:float, sigma:float, burnin:int):
+        """
+        Detects the first point of change in the data using the winsorized mean confidence interval method.
+
+        Parameters:
+        z_val (float): The control parameter for deciding the width of confidence interval. It should be in the range (0, inf).
+        h_val (float): The control parameter for the alert function. It should be in the range (0, inf).
+        mu (float): The (estimated) mean of the data.
+        sigma (float): The (estimated) standard deviation of the data.
+        burnin (int): The number of examples used for burn-in to estimate the mean and variance.
+
+        Returns:
+        int or None: The index of the first detected alert, or None if no alert is detected.
+
+        Raises:
+        AssertionError: If any of the input parameters are not of the expected type or violate the constraints.
+        """
+        assert isinstance(z_val, (int, float)) and z_val > 0, f"z_val={z_val} must be a positive number"
+        assert isinstance(h_val, (int, float)) and h_val > 0, f"h_val={h_val} must be a positive number"
+        assert isinstance(mu, (int, float)), f"Mean mu={mu} must be an int or float type"
+        assert isinstance(sigma, (int, float)) and sigma >= 0, f"standard deviation sigma={sigma} must be a non-negative number"
+        assert isinstance(burnin, int) and burnin >= 0, f"burnin={burnin} should be a non-negative value"
+        if not hasattr(self, '_winsorized_mean'):
+            raise ValueError("Must run compute_robust_methods_mean_seq() before calling winsorized_mean_CI_detect()")
+        # compute the statistics value for cumsum
+        _, _, au, al = self.winsorized_mean_CI_val(z_val, h_val, mu, sigma)
+        # return the detected the alert
+        ind = self.__check_alerts(au, al) 
+        if ind is not None:
+            ind += burnin 
+        else:
+            warnings.warn("No change point detected, detected index set to None")
+        return ind
+    
+    def cosine_tapered_mean_CI_val(self, z_val:float, h_val:float, mu:float, sigma:float):
+        """
+        Function for calculating both upper and lower statistics and alert value using the cosine tapered mean confidence interval method.
+        
+        Parameters:
+        z_val (float): The control parameter for deciding the width of confidence interval. It should be in the range (0, inf).
+        h_val (float): The control parameter for the alert function. It should be in the range (0, inf).
+        mu (float): The (estimated) mean of the data.
+        sigma (float): The (estimated) standard deviation of the data.
+        
+        Returns:
+        tuple: A tuple containing four np.arrays. 
+        s: Upper statistics value for upper alert.
+        t: Lower statistics value for lower alert.
+        au: array indicating whether an upper alert is triggered at each point.
+        al: array indicating whether a lower alert is triggered at each point.
+        """
+        assert isinstance(z_val, (int, float)) and z_val > 0, f"z_val={z_val} must be a positive number"
+        assert isinstance(h_val, (int, float)) and h_val > 0, f"h_val={h_val} must be a positive number"
+        assert isinstance(mu, (int, float)), f"Mean mu={mu} must be an int or float type"
+        assert isinstance(sigma, (int, float)) and sigma >= 0, f"standard deviation sigma={sigma} must be a non-negative number"
+        if not hasattr(self, '_cosine_tapered_mean'):
+            raise ValueError("Must run compute_robust_methods_mean_seq() before calling cosine_tapered_mean_CI_val()")
+        ## Vectors for control chart statistics and alerts
+        s = np.zeros(self.n)
+        t = np.zeros(self.n)
+        au = np.zeros(self.n)
+        al = np.zeros(self.n)
+        s[0] = mu
+        t[0] = mu
+        au[0] = int(s[0] > mu + h_val)
+        al[0] = int(t[0] < mu - h_val)
+        ## Update control chart, alerts and variance
+        for i in range(1, self.n):
+            s[i] = self._cosine_tapered_mean[i-1] + z_val * sigma / np.sqrt(i)
+            t[i] = self._cosine_tapered_mean[i-1] - z_val * sigma / np.sqrt(i)
+            au[i] = int(s[i] > (mu + h_val)) # detect increase
+            al[i] = int(t[i] < (mu - h_val)) # detect decrease
+        ## Return final upper and lower statistics and alerts
+        return s, t, au, al
+
+    def cosine_tapered_mean_CI_detect(self, z_val:float, h_val:float, mu:float, sigma:float, burnin:int):
+        """
+        Detects the first point of change in the data using the cosine tapered mean confidence interval method.
+
+        Parameters:
+        z_val (float): The control parameter for deciding the width of confidence interval. It should be in the range (0, inf).
+        h_val (float): The control parameter for the alert function. It should be in the range (0, inf).
+        mu (float): The (estimated) mean of the data.
+        sigma (float): The (estimated) standard deviation of the data.
+        burnin (int): The number of examples used for burn-in to estimate the mean and variance.
+
+        Returns:
+        int or None: The index of the first detected alert, or None if no alert is detected.
+
+        Raises:
+        AssertionError: If any of the input parameters are not of the expected type or violate the constraints.
+        """
+        assert isinstance(z_val, (int, float)) and z_val > 0, f"z_val={z_val} must be a positive number"
+        assert isinstance(h_val, (int, float)) and h_val > 0, f"h_val={h_val} must be a positive number"
+        assert isinstance(mu, (int, float)), f"Mean mu={mu} must be an int or float type"
+        assert isinstance(sigma, (int, float)) and sigma >= 0, f"standard deviation sigma={sigma} must be a non-negative number"
+        assert isinstance(burnin, int) and burnin >= 0, f"burnin={burnin} should be a non-negative value"
+        if not hasattr(self, '_cosine_tapered_mean'):
+            raise ValueError("Must run compute_robust_methods_mean_seq() before calling cosine_tapered_mean_CI_detect()")
+        # compute the statistics value for cumsum
+        _, _, au, al = self.cosine_tapered_mean_CI_val(z_val, h_val, mu, sigma)
+        # return the detected the alert
+        ind = self.__check_alerts(au, al) 
+        if ind is not None:
+            ind += burnin 
+        else:
+            warnings.warn("No change point detected, detected index set to None")
+        return ind
+
+
+
 
 
 class RobustMethods:
@@ -417,10 +767,13 @@ class RobustMethods:
         medians (list): The medians of each window of the whole data stream.
         """
         assert isinstance(window_length, int) and window_length <= self.n, f"Window length={window_length} must be an integer less than or equal to the number of observations={self.n}"
-        medians = [] # for store a list of median values
-        for i in range(self.n - window_length + 1):
+        medians = []
+        for i in range(self.n):
             # Compute the median of the window and add it to the list
-            window_median = np.median(self.x[i : i + window_length])
+            if i < window_length:
+                window_median = np.median(self.x[:i+1])
+            else:
+                window_median = np.median(self.x[i-window_length+1:i+1])
             medians.append(window_median)
         return medians
     

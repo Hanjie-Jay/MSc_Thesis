@@ -9,6 +9,7 @@ import Outliers
 import ControlChartFunc
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scipy.stats import norm
 
 # Reload the module and reimport functions from the reloaded module
 importlib.reload(GraphGeneration)
@@ -22,9 +23,28 @@ importlib.reload(Outliers)
 from Outliers import OutlierInjector
 
 importlib.reload(ControlChartFunc)
-from ControlChartFunc import RobustMethods
+from ControlChartFunc import RobustMethods, ControlChart
 
-# ------------------Testing function for new class-------------------
+# ------------------Testing function for the new ControlChart class with robust method-------------------
+random_data = np.random.normal(size=20)
+robust_method_control_chart = ControlChart(random_data)
+robust_method_control_chart.compute_robust_methods_mean_seq(window_length=10, trimmed_ratio=0.2, 
+                                                            winsorized_ratio=0.2, cosine_ratio=0.2)
+z_val = 2.575 # 99%
+h_val = 5 # small h, sansitive
+data_mean = 0
+std_dev = 1
+prob_gt_3sigma_non_standard = 1 - norm.cdf(3*std_dev + data_mean, loc=data_mean, scale=std_dev)
+swm_CI_s, swm_CI_t, swm_CI_au, swm_CI_al = robust_method_control_chart.sliding_window_median_CI_val(z_val=z_val, h_val=h_val, mu=0, sigma=1)
+swm_CI_ind = robust_method_control_chart.sliding_window_median_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1, burnin=0)
+tm_CI_s, tm_CI_t, tm_CI_au, tm_CI_al = robust_method_control_chart.trimmed_mean_CI_val(z_val=z_val, h_val=h_val, mu=0, sigma=1)
+tm_CI_ind = robust_method_control_chart.trimmed_mean_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1, burnin=0)
+wm_CI_s, wm_CI_t, wm_CI_au, wm_CI_al = robust_method_control_chart.winsorized_mean_CI_val(z_val=z_val, h_val=h_val, mu=0, sigma=1)
+wm_CI_ind = robust_method_control_chart.winsorized_mean_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1, burnin=0)
+cpm_CI_s, cpm_CI_t, cpm_CI_au, cpm_CI_al = robust_method_control_chart.cosine_tapered_mean_CI_val(z_val=z_val, h_val=h_val, mu=0, sigma=1)
+cpm_CI_ind = robust_method_control_chart.cosine_tapered_mean_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1, burnin=0)
+
+# ------------------Testing function for RobustMethods class-------------------
 # Compute lower and upper cutoff indices
 from scipy.stats import trim_mean
 from scipy.stats import mstats
