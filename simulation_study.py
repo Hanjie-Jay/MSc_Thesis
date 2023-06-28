@@ -64,6 +64,10 @@ robust_mean_seq = robust_method.compute_mean_sequence(trimmed_ratio=0.2, winsori
 trimmed_mean = robust_mean_seq['trimmed']
 winsorized_mean = robust_mean_seq['winsorized']
 cosine_tapered_mean = robust_mean_seq['cosine']
+robust_var_seq = robust_method.compute_variance_sequence(winsorized_ratio=0.2)
+mad_sd_seq = robust_var_seq['mad'] * 1.4826
+iqr_sd_seq = robust_var_seq['iqr'] * 0.7413
+winsorized_var = robust_var_seq['winsorized']
 # ------------------Testing function for grid_params_eval function without outlier-------------------
 # For displaying the full pd.df
 pd.set_option('display.max_columns', None)

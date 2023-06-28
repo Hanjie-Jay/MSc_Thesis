@@ -2,6 +2,7 @@ import warnings
 import numpy as np
 from bisect import insort
 from scipy.signal import tukey
+from scipy.stats import iqr
 
 class ControlChart:
     """
@@ -222,7 +223,7 @@ class ControlChart:
 
 class RobustMethods:
     """
-    This class implements various robust methods for computing the mean of streaming data, including trimmed mean, winsorized mean, and cosine tapered mean. It also provides a method for computing the sliding window median of the data.
+    This class provides methods for calculating robust statistics for streaming data. It includes functions to compute the mean and variance sequences using different robust methods: trimmed mean, winsorized mean, cosine-tapered mean, median absolute deviation (MAD), interquartile range (IQR), and winsorized variance.
 
     Attributes:
         x (np.ndarray): The input streaming data. It's a fixed dataset, but the values are coming in a stream.
@@ -231,6 +232,9 @@ class RobustMethods:
     Methods:
         compute_mean_sequence(trimmed_ratio:float, winsorized_ratio:float, cosine_ratio:float) -> dict:
             Computes the mean sequence of the data using three robust methods: trimmed mean, winsorized mean, and cosine tapered mean.
+
+        compute_variance_sequence(winsorized_ratio:float) -> dict:
+            Compute the variance sequence of the data using three robust methods: MAD, IQR, and winsorized variance.    
 
         sliding_window_median(window_length:int) -> list:
             Computes the median of a sliding window over the data.
@@ -247,6 +251,15 @@ class RobustMethods:
 
         __cosine_tapered_mean(ratio:float) -> float:
             Calculates the cosine tapered mean of the sorted data.
+        
+        __mad() -> float:
+        Compute the Median Absolute Deviation (MAD) of the sorted data.
+
+        __interquartile_range() -> float:
+            Compute the Interquartile Range (IQR) of the sorted data.
+
+        __winsorized_variance(ratio:float) -> float:
+            Compute the winsorized variance for a specific proportion of values from sorted data.
     """
     def __init__(self, x: np.ndarray):
         """
@@ -268,15 +281,21 @@ class RobustMethods:
         if self._current_ind < self.n:
             insort(self._sorted_data, self.x[self._current_ind])
             self._current_ind += 1
+        else:
+            # Set back to the initial value for possible use 
+            self._current_ind = 0
+            self._sorted_data = []
+            insort(self._sorted_data, self.x[self._current_ind])
+            self._current_ind += 1
 
     def compute_mean_sequence(self, trimmed_ratio:float, winsorized_ratio:float, cosine_ratio:float):
         """
         Compute the mean sequence of the data using three robust methods: trimmed mean, winsorized mean and cosine tapered mean.
         
         Parameters:
-        trimmed_ratio (float): The proportion of values to trim for the trimmed mean calculation. (Two sided)
-        winsorized_ratio (float): The proportion of values to replace for the winsorized mean calculation. (Two sided)
-        cosine_ratio (float): The proportion of values to taper for the cosine tapered mean calculation. (Two sided)
+        trimmed_ratio (float): The proportion of values (Two sided) to trim for the trimmed mean calculation. It should be in the range [0,1].
+        winsorized_ratio (float): The proportion of values (Two sided) to replace for the winsorized mean calculation. It should be in the range [0,1].
+        cosine_ratio (float): The proportion of values (Two sided) to taper for the cosine tapered mean calculation. It should be in the range [0,1].
 
         Returns:
         robust_mean_seq (dict): A dictionary containing the mean sequences calculated using each of the three robust methods.
@@ -295,6 +314,35 @@ class RobustMethods:
             "cosine": np.array(cosine_mean_seq)
         }
         return robust_mean_seq
+
+    def compute_variance_sequence(self, winsorized_ratio:float):
+        """
+        Compute the variance sequence of the data using three robust methods: median absolute deviation (MAD), interquartile range (IQR) and winsorized variance.
+        
+        Parameters:
+        winsorized_ratio (float): The proportion of values (Two sided) to replace for the winsorized mean calculation. It should be in the range [0,1].
+        
+        Note:
+        The return variance sequence of MAD and IQR are raw values, not the unbiased values for normal distribution.
+        For the normal distribution, s.d. ~ 1.4826 * mad or iqr / 1.349.
+
+        Returns:
+        robust_var_seq (dict): A dictionary containing the var sequences calculated using each of the three robust methods.
+        """
+        mad_seq = []
+        iqr_seq = []
+        winsorized_var_seq = []
+        for _ in range(self.n):
+            self.__insert_next_for__()
+            mad_seq.append(self.__mad())
+            iqr_seq.append(self.__interquartile_range())
+            winsorized_var_seq.append(self.__winsorized_variance(winsorized_ratio))
+        robust_var_seq = {
+            "mad": np.array(mad_seq),
+            "iqr": np.array(iqr_seq),
+            "winsorized": np.array(winsorized_var_seq)
+        }
+        return robust_var_seq
 
     def __trimmed_mean(self, ratio:float):
         """
@@ -375,3 +423,48 @@ class RobustMethods:
             window_median = np.median(self.x[i : i + window_length])
             medians.append(window_median)
         return medians
+    
+    def __mad(self):
+        """
+        Compute the Median Absolute Deviation (MAD) of the sorted data. (For a specific sorted data)
+
+        Returns:
+        mad (float): The MAD of the sorted data.
+        """
+        median = np.median(self._sorted_data)
+        mad = np.median(np.abs(self._sorted_data - median))
+        return mad
+    
+    def __interquartile_range(self):
+        """
+        Compute the Interquartile Range (IQR) of the sorted data. (For a specific sorted data)
+
+        Returns:
+        iqr_value (float): The IQR of the sorted data.
+        """
+        iqr_value = iqr(self._sorted_data)
+        return iqr_value
+    
+    def __winsorized_variance(self, ratio:float):
+        """
+        Calculate the winsorized variance of the sorted data. (For a specific sorted data)
+
+        Parameters:
+        ratio (float): The proportion of values to replace.
+        
+        Returns:
+        winsorized_variance (float): The winsorized variance of the data.
+        """
+        assert isinstance(ratio, (float, int)) and 0 <= ratio <= 1, f"ratio={ratio} must be a float or float in the range [0, 1]"
+        # Create a copy of the sorted data
+        winsorized_data = self._sorted_data.copy()
+        # Compute lower and upper cutoff indices
+        lower_ind = int(np.floor(len(self._sorted_data)) * ratio)
+        upper_ind = len(self._sorted_data) - lower_ind
+        # Replace the lowest and highest values
+        winsorized_data[:lower_ind] = [self._sorted_data[lower_ind]] * lower_ind
+        winsorized_data[upper_ind:] = [self._sorted_data[upper_ind - 1]] * (len(self._sorted_data) - upper_ind) # remind that the ind start with 0
+        # winsorized_data = mstats.winsorize(self._sorted_data, limits=[ratio, ratio])
+        # Compute the variance
+        winsorized_variance = np.var(winsorized_data)
+        return winsorized_variance
