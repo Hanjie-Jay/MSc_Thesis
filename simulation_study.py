@@ -15,7 +15,7 @@ from scipy.stats import norm
 importlib.reload(GraphGeneration)
 from GraphGeneration import generate_cusum_chart, generate_ewma_chart
 importlib.reload(ARLFunc)
-from ARLFunc import arl_cusum, arl_ewma
+from ARLFunc import arl_cusum, arl_ewma, arl_robust_mean, combine_alert_ind, compute_arl0, compute_arl1
 
 importlib.reload(GridEvaluation)
 from GridEvaluation import GridDataEvaluate, simulate_stream_data, stream_data_plot
@@ -25,24 +25,88 @@ from Outliers import OutlierInjector
 importlib.reload(ControlChartFunc)
 from ControlChartFunc import RobustMethods, ControlChart
 
-# ------------------Testing function for the new ControlChart class with robust method-------------------
-random_data = np.random.normal(size=20)
-robust_method_control_chart = ControlChart(random_data)
-robust_method_control_chart.compute_robust_methods_mean_seq(window_length=10, trimmed_ratio=0.2, 
-                                                            winsorized_ratio=0.2, cosine_ratio=0.2)
+# ------------------Testing function for the arl_robust_mean function-------------------
+burnin = 50
+window_length = 25
+trimmed_ratio = 0.15
+winsorized_ratio = 0.15
+cosine_ratio = 0.15
+trimmed_window_length = 20
+winsorized_window_length = 25
+cosine_window_length = 25
 z_val = 2.575 # 99%
-h_val = 5 # small h, sansitive
+alpha_val = 2 # small h, sansitive
+true_cp = 500
+# data with no outliers
+data_1 = np.append(np.random.normal(size=true_cp), 
+                       np.random.normal(size=400,loc=3.))
+robust_arl_results = arl_robust_mean(data_1, burnin, window_length, trimmed_ratio, winsorized_ratio,
+                                     cosine_ratio, trimmed_window_length, winsorized_window_length,
+                                     cosine_window_length, z_val, alpha_val, true_cp)
+# data with outliers
+n_sam_bef_cp = 500
+n_sam_aft_cp = 400
+variance = 9
+burnin = 100
+gap_size = 5
+alpha = 0.001
+valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
+outlier_position = valid_positions[2]
+outlier_ratio = 0.05
+asymmetric_ratio = 0.25
+data_1 = np.append(np.random.normal(size=n_sam_bef_cp, scale=np.sqrt(variance)), 
+                       np.random.normal(size=n_sam_aft_cp,loc=gap_size, scale=np.sqrt(variance)))
+outinj = OutlierInjector(data_1 ,n_sam_bef_cp, n_sam_aft_cp, burnin, variance, 
+                         gap_size, variance, alpha, outlier_position, outlier_ratio, asymmetric_ratio=0.25)
+out_data = outinj.insert_outliers()
+robust_arl_results_out = arl_robust_mean(out_data, burnin, window_length, trimmed_ratio, winsorized_ratio,
+                                     cosine_ratio, trimmed_window_length, winsorized_window_length,
+                                     cosine_window_length, z_val, alpha_val, n_sam_bef_cp)
+
+
+# ------------------Testing function for the new ControlChart class with robust method-------------------
 data_mean = 0
 std_dev = 1
 prob_gt_3sigma_non_standard = 1 - norm.cdf(3*std_dev + data_mean, loc=data_mean, scale=std_dev)
+# data with no outliers
+burnin = 30
+burnin_data = np.random.normal(size=burnin)
+random_data = np.append(np.random.normal(size=30), np.random.normal(loc=3., size=30))
+robust_method_control_chart = ControlChart(random_data)
+robust_method_control_chart.compute_robust_methods_mean_seq(median_window_length=10, trimmed_ratio=0.15, 
+                                                            winsorized_ratio=0.15, cosine_ratio=0.15, 
+                                                            trimmed_window_length=15, winsorized_window_length=18,
+                                                             cosine_window_length=20, burnin_data=burnin_data)
+# data with outliers
+burnin = 30
+valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
+outlier_position = valid_positions[1]
+alpha = 1e-5
+outlier_ratio = 0.2
+asymmetric_ratio = 0.25
+random_data = np.append(np.random.normal(size=60, scale=np.sqrt(1)), 
+                       np.random.normal(size=40,loc=3., scale=np.sqrt(1)))
+outinj = OutlierInjector(random_data ,60, 40, burnin, 1, 
+                         3, 1, 1e-4, outlier_position, outlier_ratio, asymmetric_ratio=0.25)
+out_data = outinj.insert_outliers()
+robust_method_control_chart = ControlChart(out_data[burnin:])
+robust_method_control_chart.compute_robust_methods_mean_seq(median_window_length=10, trimmed_ratio=0.15, 
+                                                            winsorized_ratio=0.15, cosine_ratio=0.15, 
+                                                            trimmed_window_length=15, winsorized_window_length=18,
+                                                             cosine_window_length=20, burnin_data=out_data[:burnin])
+
+z_val = 2.575 # 99%
+h_val = 2 # small h, sansitive
+
 swm_CI_s, swm_CI_t, swm_CI_au, swm_CI_al = robust_method_control_chart.sliding_window_median_CI_val(z_val=z_val, h_val=h_val, mu=0, sigma=1)
-swm_CI_ind = robust_method_control_chart.sliding_window_median_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1, burnin=0)
+swm_CI_ind = robust_method_control_chart.sliding_window_median_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1)
 tm_CI_s, tm_CI_t, tm_CI_au, tm_CI_al = robust_method_control_chart.trimmed_mean_CI_val(z_val=z_val, h_val=h_val, mu=0, sigma=1)
-tm_CI_ind = robust_method_control_chart.trimmed_mean_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1, burnin=0)
+tm_CI_ind = robust_method_control_chart.trimmed_mean_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1)
 wm_CI_s, wm_CI_t, wm_CI_au, wm_CI_al = robust_method_control_chart.winsorized_mean_CI_val(z_val=z_val, h_val=h_val, mu=0, sigma=1)
-wm_CI_ind = robust_method_control_chart.winsorized_mean_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1, burnin=0)
+wm_CI_ind = robust_method_control_chart.winsorized_mean_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1)
 cpm_CI_s, cpm_CI_t, cpm_CI_au, cpm_CI_al = robust_method_control_chart.cosine_tapered_mean_CI_val(z_val=z_val, h_val=h_val, mu=0, sigma=1)
-cpm_CI_ind = robust_method_control_chart.cosine_tapered_mean_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1, burnin=0)
+cpm_CI_ind = robust_method_control_chart.cosine_tapered_mean_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1)
+
 
 # ------------------Testing function for RobustMethods class-------------------
 # Compute lower and upper cutoff indices
@@ -76,18 +140,27 @@ weights = tukey(len(sorted_data), ratio)
 cosine_tapered_data = weights * sorted_data
 # Compute the mean
 cosine_tapered_mean = np.mean(cosine_tapered_data)
+burnin = 10
+burnin_data = np.random.normal(size=burnin)
+random_data = np.append(np.random.normal(size=20), np.random.normal(loc=-3., size=10))
 
-random_data = np.random.normal(size=20)
 robust_method = RobustMethods(random_data)
-sliding_window_median = robust_method.sliding_window_median(window_length=10)
-robust_mean_seq = robust_method.compute_mean_sequence(trimmed_ratio=0.2, winsorized_ratio=0.2, cosine_ratio=0.2)
+sliding_window_median = robust_method.sliding_window_median(window_length=12) # could not be None here
+robust_mean_seq = robust_method.compute_mean_sequence(trimmed_ratio=0.20, winsorized_ratio=0.20, cosine_ratio=0.20, 
+                                                      trimmed_window_length=12, winsorized_window_length=12, cosine_window_length=12)
+
 trimmed_mean = robust_mean_seq['trimmed']
 winsorized_mean = robust_mean_seq['winsorized']
 cosine_tapered_mean = robust_mean_seq['cosine']
+trimmed_mean.shape
+
+# For the robust variance
 robust_var_seq = robust_method.compute_variance_sequence(winsorized_ratio=0.2)
 mad_sd_seq = robust_var_seq['mad'] * 1.4826
 iqr_sd_seq = robust_var_seq['iqr'] * 0.7413
 winsorized_var = robust_var_seq['winsorized']
+
+
 # ------------------Testing function for grid_params_eval function without outlier-------------------
 # For displaying the full pd.df
 pd.set_option('display.max_columns', None)
@@ -113,6 +186,8 @@ grideval.plot_ARL0_graphs(save=True)
 grideval.plot_ARL1_graphs(save=True)
 grideval.plot_best_models(save=True)
 # ------------------End-------------------
+
+
 
 
 # -------------------testing for outliers generation in GridEvaluation class--------------------
