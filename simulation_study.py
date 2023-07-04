@@ -27,7 +27,7 @@ importlib.reload(ControlChartFunc)
 from ControlChartFunc import RobustMethods, ControlChart
 
 
-# ------------------Testing function for the arl_robust_mean function-------------------
+# ------------------Testing function for the grid_robust_params_eval function-------------------
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', 400)
 # Setup initial values
@@ -42,7 +42,7 @@ cusum_params_list = [(1.50, 1.61), (1.25, 1.99), (1.00, 2.52), (0.75, 3.34), (0.
 ewma_params_list = [(1.00,3.090),(0.75,3.087),(0.50,3.071),(0.40,3.054),(0.30,3.023),(0.25,2.998),(0.20,2.962),(0.10,2.814),(0.05,2.615),(0.03,2.437)]
 # z_list = [1.6449, 1.96, 2.5759]
 # alpha_list = [1, 1.5, 2, 2.5, 3]
-z_list = [1.6449, 1.96]
+z_list = [1.64, 1.96]
 alpha_list = [1.5, 2, 2.5]
 tm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
 wm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
@@ -60,6 +60,32 @@ grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances,
                              outlier_position, beta, outlier_ratio, asymmetric_ratio)
 rob_per_table, rob_per_summary = grideval.grid_robust_params_eval()
 
+grideval.plot_robust_ARL0_graphs(True)
+grideval.plot_robust_ARL1_graphs(True)
+grideval.plot_best_models(True)
+tm_table = rob_per_table[rob_per_table['Model (Parameters)'].str.contains('TM')]
+tm_params = tm_table['Model (Parameters)'].unique()
+
+rob_per_table[['Model', 'Parameters']] = rob_per_table['Model (Parameters)'].str.split(" ", n = 1, expand = True)
+
+# Get the tables for each method
+tm_table = rob_per_table[rob_per_table['Model'] == 'TM'] # Select rows that have TM
+wm_table = rob_per_table[rob_per_table['Model'] == 'WM'] # Select rows that have WM
+swm_table = rob_per_table[rob_per_table['Model'] == 'SWM'] # Select rows that have SWM
+ctm_table = rob_per_table[rob_per_table['Model'] == 'CTM'] # Select rows that have CTM
+# unique model parameters for all methods
+tm_params = tm_table['Model (Parameters)'].unique()
+wm_params = wm_table['Model (Parameters)'].unique()
+swm_params = swm_table['Model (Parameters)'].unique()
+ctm_params = ctm_table['Model (Parameters)'].unique()
+plt.figure(figsize=(14, 8))
+ax = sns.boxplot(data=tm_table, x='Gap Size', y='ARL0', hue='Data Var')
+ax.legend(fontsize=14)
+ax.tick_params(labelsize=14)
+plt.title(f'$ARL_0$ Values of TM Model in Streaming Data Without Outliers', fontsize=18)
+plt.ylabel('$ARL_0$', fontsize=14)
+plt.xlabel('Gap Size', fontsize=14)
+plt.show()
 # ------------------Testing function for the arl_robust_mean function-------------------
 burnin = 50
 window_length = 25

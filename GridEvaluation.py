@@ -294,7 +294,7 @@ class GridDataEvaluate:
                                 arl0 = method_arl['arl0']
                                 arl1 = method_arl['arl1']
                                 params = method_params[method]
-                                arl_values.append((f'{method} ({params})', f'z:{z} alpha:{alpha}', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed))
+                                arl_values.append((f'{method} (z:{z},a:{alpha},{params})', f'z:{z} alpha:{alpha}', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed))
             else:
                 simulate_data_list = self.generate_with_outliers_grid_data(seed) # simulate data with outliers
                 for data, true_cp, gap_size, variance, outlier_ind in simulate_data_list:
@@ -312,15 +312,15 @@ class GridDataEvaluate:
                             }
                             results = arl_robust_mean(
                                 data, self.burnin, swm_params, 
-                                tm_params[0] if swm_params is not None else None, wm_params[0] if wm_params is not None else None, 
-                                ctm_params[0] if ctm_params is not None else None, tm_params[1] if swm_params is not None else None, 
+                                tm_params[0] if tm_params is not None else None, wm_params[0] if wm_params is not None else None, 
+                                ctm_params[0] if ctm_params is not None else None, tm_params[1] if tm_params is not None else None, 
                                 wm_params[1] if wm_params is not None else None, ctm_params[1] if ctm_params is not None else None, 
                                 z, alpha, true_cp)
                             for method, method_arl in results.items():
                                 arl0 = method_arl['arl0']
                                 arl1 = method_arl['arl1']
                                 params = method_params[method]
-                                arl_values.append((f'{method} ({params})', f'z:{z} alpha:{alpha}', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed, outlier_ind))
+                                arl_values.append((f'{method} (z:{z},a:{alpha},{params})', f'z:{z} alpha:{alpha}', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed, outlier_ind))
 
         # transform the data into pandas dataframe and compute the mean and variance using groupby
         if self.outlier_position is None:
@@ -529,6 +529,165 @@ class GridDataEvaluate:
                     plt.tight_layout()
                     plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
+    
+    def plot_robust_ARL0_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_Methods:bool=True, each_Method:bool=True, dpi:int=500):
+        if not hasattr(self, 'robust_performance_table'):
+            self.grid_robust_params_eval()
+        per_table = self.robust_performance_table
+        # Assertions to validate input data types
+        assert isinstance(save, bool), f"The save:{save} parameter must be a boolean."
+        assert isinstance(per_table, pd.DataFrame), "per_table must be a pandas DataFrame."
+        assert isinstance(each_G, bool), f"each_G:{each_G} must be a boolean value."
+        assert isinstance(each_G_V, bool), f"each_G_V:{each_G_V} must be a boolean value."
+        assert isinstance(all_Methods, bool), f"all_Methods:{all_Methods} must be a boolean value."
+        assert isinstance(each_Method, bool), f"each_Method:{each_Method} must be a boolean value."
+        assert isinstance(dpi, int) and dpi > 0, f"The dpi:{dpi} parameter must be a positive integer."
+        
+        # Separate unique methods rows
+        per_table[['Model', 'Parameters']] = per_table['Model (Parameters)'].str.split(" ", n = 1, expand = True)
+        # Get the tables for each method
+        tm_table = per_table[per_table['Model'] == 'TM'] # Select rows that have TM
+        wm_table = per_table[per_table['Model'] == 'WM'] # Select rows that have WM
+        swm_table = per_table[per_table['Model'] == 'SWM'] # Select rows that have SWM
+        ctm_table = per_table[per_table['Model'] == 'CTM'] # Select rows that have CTM
+        # unique model parameters for all methods
+        tm_params = tm_table['Model (Parameters)'].unique()
+        wm_params = wm_table['Model (Parameters)'].unique()
+        swm_params = swm_table['Model (Parameters)'].unique()
+        ctm_params = ctm_table['Model (Parameters)'].unique()
+        
+        # Set style and palette
+        sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
+        sns.color_palette("crest", as_cmap=True)
+        n_colors = len(tm_params) + len(wm_params) + len(swm_params) + len(ctm_params) # the total number of unique parameters
+        colors = sns.color_palette("crest", n_colors=n_colors)
+        colors_each = sns.color_palette("crest", n_colors=len(self.variances))
+
+        if save:
+            base_dir = os.path.join("Plots", 'Robust_Params_graphs', 'ARL_0_graphs')
+            os.makedirs(base_dir, exist_ok=True) # make the directory to save graphs
+
+        # Create boxplots for each gap size and z & alpha value
+        if each_G == True:
+            if save:
+                # Define the graph type directory name based on the current boxplot.
+                graph_type = 'each_gap_za'
+                graph_dir = os.path.join(base_dir, graph_type)
+                os.makedirs(graph_dir, exist_ok=True)
+            for za in per_table['z and alpha'].unique():
+                subset_za = per_table[per_table['z and alpha'] == za]
+                for gap_size in subset_za['Gap Size'].unique():
+                    subset_df = subset_za[subset_za['Gap Size'] == gap_size]
+                    plt.figure(figsize=(20, 8))
+                    ax =sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df, palette=colors)
+                    ax.tick_params(labelsize=10)
+                    if self.outlier_position is None:
+                        plt.title(f'Boxplot of $ARL_0$ for Various Models on Streaming Data with z and alpha: {za}, Mean Gap Size of {gap_size} (No Outliers)', fontsize=18)
+                    else:
+                        plt.title(f'Boxplot of $ARL_0$ for Various Models on Streaming Data with z and alpha: {za}, Mean Gap Size of {gap_size} (Outliers in {self.outlier_position} Period)', fontsize=18)
+                    plt.ylabel('$ARL_0$', fontsize=13)
+                    plt.xlabel('Model (Parameters)', fontsize=14)
+                    plt.xticks(rotation=30)
+                    if save:
+                        # Define the filename based on the specific graph parameters.
+                        filename = f"arl0_gap_{gap_size}_za_{za}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        plt.tight_layout()
+                        plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                    plt.show()
+
+        # Create boxplots for each gap size, variance size and z & alpha value
+        if each_G_V == True:
+            if save:
+                # Define the graph type directory name based on the current boxplot.
+                graph_type = 'each_gap_&_var_za'
+                graph_dir = os.path.join(base_dir, graph_type)
+                os.makedirs(graph_dir, exist_ok=True)
+            for za in per_table['z and alpha'].unique():
+                subset_za = per_table[per_table['z and alpha'] == za]
+                for gap_size in subset_za['Gap Size'].unique():
+                    for vari in subset_za['Data Var'].unique():
+                        subset_df = subset_za[(subset_za['Gap Size'] == gap_size) & (subset_za['Data Var'] == vari)]
+                        plt.figure(figsize=(20, 8))
+                        ax =sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df, palette=colors)
+                        ax.tick_params(labelsize=10)
+                        if self.outlier_position is None:
+                            plt.title(f'Boxplot of $ARL_0$ for Various Models on Streaming Data with z and alpha: {za}, Mean Gap Size of {gap_size} and Data Variance of {vari} (No Outliers)', fontsize=18)
+                        else:
+                            plt.title(f'Boxplot of $ARL_0$ for Various Models on Streaming Data with z and alpha: {za}, Mean Gap Size of {gap_size}, Data Variance of {vari} (Outliers in {self.outlier_position} Period)', fontsize=18)
+                        plt.ylabel('$ARL_0$', fontsize=13)
+                        plt.xlabel('Model (Parameters)', fontsize=14)
+                        plt.xticks(rotation=30)
+                        if save:
+                            # Define the filename based on the specific graph parameters.
+                            filename = f"arl0_gap_{gap_size}_var{vari}_za_{za}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                            plt.tight_layout()
+                            plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                        plt.show()
+        
+        # Create boxplots for all four models describing their general performances in each data mean gap and variance setting
+        if all_Methods == True:
+            models = {
+                'TM': tm_table,
+                'WM': wm_table,
+                'SWM': swm_table,
+                'CTM': ctm_table
+            }
+            # Iterate over each model
+            for model_name, model_table in models.items():
+                # Create a boxplot
+                plt.figure(figsize=(14, 8))
+                ax = sns.boxplot(data=model_table, x='Gap Size', y='ARL0', hue='Data Var', palette=colors_each)
+                ax.legend(fontsize=14)
+                ax.tick_params(labelsize=14)
+                # Titles and labels
+                if self.outlier_position is None:
+                    plt.title(f'$ARL_0$ Values of {model_name} Model in Streaming Data Without Outliers', fontsize=18)
+                else:
+                    plt.title(f'$ARL_0$ Values of {model_name} Model in Streaming Data with Outliers in {self.outlier_position} Period', fontsize=18)
+                plt.ylabel('$ARL_0$', fontsize=14)
+                plt.xlabel('Gap Size', fontsize=14)
+                # Save the plot
+                if save:
+                    filename = f"arl0_{model_name}_model_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.tight_layout()
+                    plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
+                plt.show()
+
+        # Create boxplots for each parameter setting in all four models describing their general performances in each data mean gap and variance setting
+        if each_Method == True:
+            models = {
+                'TM': tm_table,
+                'WM': wm_table,
+                'SWM': swm_table,
+                'CTM': ctm_table
+            }
+            for model_name, model_table in models.items():
+                # Extract unique parameters for the current model
+                model_params = model_table['Model (Parameters)'].unique()
+                # Create directory for this model
+                model_dir = os.path.join(base_dir, model_name)
+                os.makedirs(model_dir, exist_ok=True)
+                # Iterate over each unique parameter and create a boxplot 
+                for params in model_params:
+                    z_alpha_values = model_table.loc[model_table['Model (Parameters)']==params, 'z and alpha'].values[0] # receive z and alpha value
+                    control_parameters = params.split('(')[-1].split(')')[0] # split for the last ( and first ) to receive control parameter
+                    plt.figure(figsize=(14, 8))
+                    ax = sns.boxplot(data=model_table[model_table['Model (Parameters)']==params], x='Gap Size', y='ARL0', hue='Data Var', palette=colors_each)
+                    ax.legend(fontsize=14)
+                    ax.tick_params(labelsize=14)
+                    if self.outlier_position is None:
+                        plt.title(f'The Values of $ARL_0$ for Model {model_name} ({z_alpha_values}, Control Parameters: {control_parameters}) under Different Streaming Data Settings, Without Outliers', fontsize=16)
+                    else:
+                        plt.title(f'The Values of $ARL_0$ for Model {model_name} ({z_alpha_values}, Control Parameters: {control_parameters}) under Different Streaming Data Settings with Outliers in {self.outlier_position} period', fontsize=16)
+                    plt.ylabel('$ARL_0$', fontsize=14)
+                    plt.xlabel('Gap Size', fontsize=14)
+                    # Save the plot
+                    if save:
+                        filename = f"arl0_{params}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        plt.tight_layout()
+                        plt.savefig(os.path.join(model_dir, filename), dpi=dpi, format='png')
+                    plt.show()
+        
 
     def plot_C_E_ARL1_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_CUSUM:bool=True, each_CUSUM:bool=True, all_EWMA:bool=True, each_EWMA:bool=True, dpi:int=500):
         """
@@ -717,6 +876,164 @@ class GridDataEvaluate:
                     plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
+    def plot_robust_ARL1_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_Methods:bool=True, each_Method:bool=True, dpi:int=500):
+        if not hasattr(self, 'robust_performance_table'):
+            self.grid_robust_params_eval()
+        per_table = self.robust_performance_table
+        # Assertions to validate input data types
+        assert isinstance(save, bool), f"The save:{save} parameter must be a boolean."
+        assert isinstance(per_table, pd.DataFrame), "per_table must be a pandas DataFrame."
+        assert isinstance(each_G, bool), f"each_G:{each_G} must be a boolean value."
+        assert isinstance(each_G_V, bool), f"each_G_V:{each_G_V} must be a boolean value."
+        assert isinstance(all_Methods, bool), f"all_Methods:{all_Methods} must be a boolean value."
+        assert isinstance(each_Method, bool), f"each_Method:{each_Method} must be a boolean value."
+        assert isinstance(dpi, int) and dpi > 0, f"The dpi:{dpi} parameter must be a positive integer."
+        # Remove the no change point data as it is meaningless
+        per_table = per_table[per_table['Gap Size'] != 0]
+        # Separate unique methods rows
+        per_table[['Model', 'Parameters']] = per_table['Model (Parameters)'].str.split(" ", n = 1, expand = True)
+        # Get the tables for each method
+        tm_table = per_table[per_table['Model'] == 'TM'] # Select rows that have TM
+        wm_table = per_table[per_table['Model'] == 'WM'] # Select rows that have WM
+        swm_table = per_table[per_table['Model'] == 'SWM'] # Select rows that have SWM
+        ctm_table = per_table[per_table['Model'] == 'CTM'] # Select rows that have CTM
+        # unique model parameters for all methods
+        tm_params = tm_table['Model (Parameters)'].unique()
+        wm_params = wm_table['Model (Parameters)'].unique()
+        swm_params = swm_table['Model (Parameters)'].unique()
+        ctm_params = ctm_table['Model (Parameters)'].unique()
+        # Set style and palette
+        sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
+        sns.color_palette("crest", as_cmap=True)
+        n_colors = len(tm_params) + len(wm_params) + len(swm_params) + len(ctm_params) # the total number of unique parameters
+        colors = sns.color_palette("crest", n_colors=n_colors)
+        colors_each = sns.color_palette("crest", n_colors=len(self.variances))
+
+        if save:
+            base_dir = os.path.join("Plots", 'Robust_Params_graphs', 'ARL_1_graphs')
+            os.makedirs(base_dir, exist_ok=True) # make the directory to save graphs
+
+        # Create boxplots for each gap size and z & alpha value
+        if each_G == True:
+            if save:
+                # Define the graph type directory name based on the current boxplot.
+                graph_type = 'each_gap_za'
+                graph_dir = os.path.join(base_dir, graph_type)
+                os.makedirs(graph_dir, exist_ok=True)
+            for za in per_table['z and alpha'].unique():
+                subset_za = per_table[per_table['z and alpha'] == za]
+                for gap_size in subset_za['Gap Size'].unique():
+                    subset_df = subset_za[subset_za['Gap Size'] == gap_size]
+                    plt.figure(figsize=(20, 8))
+                    ax =sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df, palette=colors)
+                    ax.tick_params(labelsize=10)
+                    if self.outlier_position is None:
+                        plt.title(f'Boxplot of $ARL_1$ for Various Models on Streaming Data with z and alpha: {za}, Mean Gap Size of {gap_size} (No Outliers)', fontsize=18)
+                    else:
+                        plt.title(f'Boxplot of $ARL_1$ for Various Models on Streaming Data with z and alpha: {za}, Mean Gap Size of {gap_size} (Outliers in {self.outlier_position} Period)', fontsize=18)
+                    plt.ylabel('$ARL_1$', fontsize=13)
+                    plt.xlabel('Model (Parameters)', fontsize=14)
+                    plt.xticks(rotation=30)
+                    if save:
+                        # Define the filename based on the specific graph parameters.
+                        filename = f"arl1_gap_{gap_size}_za_{za}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        plt.tight_layout()
+                        plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                    plt.show()
+
+        # Create boxplots for each gap size, variance size and z & alpha value
+        if each_G_V == True:
+            if save:
+                # Define the graph type directory name based on the current boxplot.
+                graph_type = 'each_gap_&_var_za'
+                graph_dir = os.path.join(base_dir, graph_type)
+                os.makedirs(graph_dir, exist_ok=True)
+            for za in per_table['z and alpha'].unique():
+                subset_za = per_table[per_table['z and alpha'] == za]
+                for gap_size in subset_za['Gap Size'].unique():
+                    for vari in subset_za['Data Var'].unique():
+                        subset_df = subset_za[(subset_za['Gap Size'] == gap_size) & (subset_za['Data Var'] == vari)]
+                        plt.figure(figsize=(20, 8))
+                        ax =sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df, palette=colors)
+                        ax.tick_params(labelsize=10)
+                        if self.outlier_position is None:
+                            plt.title(f'Boxplot of $ARL_1$ for Various Models on Streaming Data with z and alpha: {za}, Mean Gap Size of {gap_size} and Data Variance of {vari} (No Outliers)', fontsize=18)
+                        else:
+                            plt.title(f'Boxplot of $ARL_1$ for Various Models on Streaming Data with z and alpha: {za}, Mean Gap Size of {gap_size}, Data Variance of {vari} (Outliers in {self.outlier_position} Period)', fontsize=18)
+                        plt.ylabel('$ARL_1$', fontsize=13)
+                        plt.xlabel('Model (Parameters)', fontsize=14)
+                        plt.xticks(rotation=30)
+                        if save:
+                            # Define the filename based on the specific graph parameters.
+                            filename = f"arl1_gap_{gap_size}_var{vari}_za_{za}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                            plt.tight_layout()
+                            plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                        plt.show()
+        
+        # Create boxplots for all four models describing their general performances in each data mean gap and variance setting
+        if all_Methods == True:
+            models = {
+                'TM': tm_table,
+                'WM': wm_table,
+                'SWM': swm_table,
+                'CTM': ctm_table
+            }
+            # Iterate over each model
+            for model_name, model_table in models.items():
+                # Create a boxplot
+                plt.figure(figsize=(14, 8))
+                ax = sns.boxplot(data=model_table, x='Gap Size', y='ARL1', hue='Data Var', palette=colors_each)
+                ax.legend(fontsize=14)
+                ax.tick_params(labelsize=14)
+                # Titles and labels
+                if self.outlier_position is None:
+                    plt.title(f'$ARL_1$ Values of {model_name} Model in Streaming Data Without Outliers', fontsize=18)
+                else:
+                    plt.title(f'$ARL_1$ Values of {model_name} Model in Streaming Data with Outliers in {self.outlier_position} Period', fontsize=18)
+                plt.ylabel('$ARL_1$', fontsize=14)
+                plt.xlabel('Gap Size', fontsize=14)
+                # Save the plot
+                if save:
+                    filename = f"arl1_{model_name}_model_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    plt.tight_layout()
+                    plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
+                plt.show()
+
+        # Create boxplots for each parameter setting in all four models describing their general performances in each data mean gap and variance setting
+        if each_Method == True:
+            models = {
+                'TM': tm_table,
+                'WM': wm_table,
+                'SWM': swm_table,
+                'CTM': ctm_table
+            }
+            for model_name, model_table in models.items():
+                # Extract unique parameters for the current model
+                model_params = model_table['Model (Parameters)'].unique()
+                # Create directory for this model
+                model_dir = os.path.join(base_dir, model_name)
+                os.makedirs(model_dir, exist_ok=True)
+                # Iterate over each unique parameter and create a boxplot 
+                for params in model_params:
+                    z_alpha_values = model_table.loc[model_table['Model (Parameters)']==params, 'z and alpha'].values[0] # receive z and alpha value
+                    control_parameters = params.split('(')[-1].split(')')[0] # split for the last ( and first ) to receive control parameter
+                    plt.figure(figsize=(14, 8))
+                    ax = sns.boxplot(data=model_table[model_table['Model (Parameters)']==params], x='Gap Size', y='ARL1', hue='Data Var', palette=colors_each)
+                    ax.legend(fontsize=14)
+                    ax.tick_params(labelsize=14)
+                    if self.outlier_position is None:
+                        plt.title(f'The Values of $ARL_1$ for Model {model_name} ({z_alpha_values}, Control Parameters: {control_parameters}) under Different Streaming Data Settings, Without Outliers', fontsize=16)
+                    else:
+                        plt.title(f'The Values of $ARL_1$ for Model {model_name} ({z_alpha_values}, Control Parameters: {control_parameters}) under Different Streaming Data Settings with Outliers in {self.outlier_position} period', fontsize=16)
+                    plt.ylabel('$ARL_1$', fontsize=14)
+                    plt.xlabel('Gap Size', fontsize=14)
+                    # Save the plot
+                    if save:
+                        filename = f"arl1_{params}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        plt.tight_layout()
+                        plt.savefig(os.path.join(model_dir, filename), dpi=dpi, format='png')
+                    plt.show()
+
     def plot_best_models(self, save:bool=False, dpi:int=500):
         """
         This function takes a pandas dataframe and plots the ARL0 and ARL1 values for the best CUSUM and EWMA models for each gap size.
@@ -731,24 +1048,27 @@ class GridDataEvaluate:
         """
         if not hasattr(self, 'C_E_performance_table'):
             self.grid_C_E_params_eval()
-        per_table = self.C_E_performance_table
+        C_E_per_table = self.C_E_performance_table
+        if not hasattr(self, 'robust_performance_table'):
+            self.grid_robust_params_eval()
+        robust_per_table = self.robust_performance_table
         # Assert that input is a pandas DataFrame
         assert isinstance(save, bool), "The save parameter must be a boolean."
         assert isinstance(dpi, int) and dpi > 0, f"The dpi:{dpi} parameter must be a positive integer."
-        assert isinstance(per_table, pd.DataFrame), "Input per_table must be a pandas DataFrame."
         # Find the table that contains mean and std of ARL0 & ARL1 for each model and each gap size
-        per_table = per_table.groupby([f'Gap Size','Model (Parameters)']).agg({'ARL0':['mean', 'std'], 
+        C_E_per_table = C_E_per_table.groupby([f'Gap Size','Model (Parameters)']).agg({'ARL0':['mean', 'std'], 
                                                                             'ARL1':['mean', 'std']}).reset_index()
-
+        robust_per_table = robust_per_table.groupby([f'Gap Size','Model (Parameters)']).agg({'ARL0':['mean', 'std'], 
+                                                                            'ARL1':['mean', 'std']}).reset_index()
         # Best models for cusum and ewma of different gap sizes
         best_arl0_cusums = pd.DataFrame()
         best_arl0_ewmas = pd.DataFrame()
         best_arl1_cusums = pd.DataFrame()
         best_arl1_ewmas = pd.DataFrame()
 
-        for gap in per_table['Gap Size'].unique():
+        for gap in C_E_per_table['Gap Size'].unique():
             # Filter data for specific gap
-            gap_data = per_table[per_table['Gap Size'] == gap]
+            gap_data = C_E_per_table[C_E_per_table['Gap Size'] == gap]
             # Separate tables for cusum and ewma
             cusum_data = gap_data[gap_data['Model (Parameters)'].str.contains('CUSUM')]
             ewma_data = gap_data[gap_data['Model (Parameters)'].str.contains('EWMA')]
@@ -767,17 +1087,66 @@ class GridDataEvaluate:
                 best_arl1_cusums = pd.concat([best_arl1_cusums, cusum_data.iloc[[0]]])
                 best_arl1_ewmas = pd.concat([best_arl1_ewmas, ewma_data.iloc[[0]]])
 
+        # Best models for TM, WM, SWM, and CTM of different gap sizes
+        best_arl0_tms = pd.DataFrame()
+        best_arl1_tms = pd.DataFrame()
+        best_arl0_wms = pd.DataFrame()
+        best_arl1_wms = pd.DataFrame()
+        best_arl0_swms = pd.DataFrame()
+        best_arl1_swms = pd.DataFrame()
+        best_arl0_ctms = pd.DataFrame()
+        best_arl1_ctms = pd.DataFrame()
+
+        for gap in robust_per_table['Gap Size'].unique():
+            # Filter data for specific gap
+            gap_data = robust_per_table[robust_per_table['Gap Size'] == gap]
+            gap_data[['Model', 'Parameters']] = gap_data['Model (Parameters)'].str.split(" ", n = 1, expand = True)
+            # Separate tables for TM, WM, SWM, and CTM
+            tm_data = gap_data[gap_data['Model'] == 'TM'] 
+            wm_data = gap_data[gap_data['Model'] == 'WM'] 
+            swm_data = gap_data[gap_data['Model'] == 'SWM'] 
+            ctm_data = gap_data[gap_data['Model'] == 'CTM']
+            # Sort by mean and standard deviation
+            tm_data = tm_data.sort_values(by=[('ARL0', 'mean'), ('ARL0', 'std')], ascending=[False, True])
+            wm_data = wm_data.sort_values(by=[('ARL0', 'mean'), ('ARL0', 'std')], ascending=[False, True])
+            swm_data = swm_data.sort_values(by=[('ARL0', 'mean'), ('ARL0', 'std')], ascending=[False, True])
+            ctm_data = ctm_data.sort_values(by=[('ARL0', 'mean'), ('ARL0', 'std')], ascending=[False, True])
+            # Append the best model for ARL0
+            best_arl0_tms = pd.concat([best_arl0_tms, tm_data.iloc[[0]]])
+            best_arl0_wms = pd.concat([best_arl0_wms, wm_data.iloc[[0]]])
+            best_arl0_swms = pd.concat([best_arl0_swms, swm_data.iloc[[0]]])
+            best_arl0_ctms = pd.concat([best_arl0_ctms, ctm_data.iloc[[0]]])
+            # Do the same for ARL1 but not for gap = 0
+            if gap != 0:
+                # Now do the same for ARL1, but remember that for ARL1, lower is better
+                tm_data = tm_data.sort_values(by=[('ARL1', 'mean'), ('ARL1', 'std')], ascending=True)
+                wm_data = wm_data.sort_values(by=[('ARL1', 'mean'), ('ARL1', 'std')], ascending=True)
+                swm_data = swm_data.sort_values(by=[('ARL1', 'mean'), ('ARL1', 'std')], ascending=True)
+                ctm_data = ctm_data.sort_values(by=[('ARL1', 'mean'), ('ARL1', 'std')], ascending=True)
+                # Append the best model for ARL1
+                best_arl1_tms = pd.concat([best_arl1_tms, tm_data.iloc[[0]]])
+                best_arl1_wms = pd.concat([best_arl1_wms, wm_data.iloc[[0]]])
+                best_arl1_swms = pd.concat([best_arl1_swms, swm_data.iloc[[0]]])
+                best_arl1_ctms = pd.concat([best_arl1_ctms, ctm_data.iloc[[0]]])
+
         # Create evenly spaced x values for plots
         x_arl0 = np.arange(len(best_arl0_cusums))
         x_arl1 = np.arange(len(best_arl1_cusums))
 
         # Define offsets for annotation positions
-        offsets_cusum = np.array([-0.05, 1])  # adjust as needed
-        offsets_ewma = np.array([0.05, -1])  # adjust as needed
-
+        offsets_cusum = np.array([-0.05, 10])  # adjust as needed
+        offsets_ewma = np.array([0.05, -5])  # adjust as needed
+        offsets_tm = np.array([-0.05, 15])  # adjust as needed
+        offsets_wm = np.array([0.05, 20])  # adjust as needed
+        offsets_swm = np.array([-0.05, 25])  # adjust as needed
+        offsets_ctm = np.array([0.05, 30]) # adjust as needed
         # Define colors
         color_cusum = '#003E74' # Imeprial blue
         color_ewma = '#379f9f' # Seaglass
+        color_tm = '#02893B' # Dark Green
+        color_wm = '#002147' # Navy
+        color_swm = '#373A36' # Dark Grey
+        color_ctm = '#BBCE00' # Lime
 
         # Plot for ARL0 of the best models for different gap sizes
         plt.figure(figsize=(16, 8))
@@ -793,10 +1162,34 @@ class GridDataEvaluate:
         for i, txt in enumerate(best_arl0_ewmas['Model (Parameters)']):
             plt.annotate(txt, (x_arl0[i], best_arl0_ewmas[('ARL0', 'mean')].iloc[i]) + offsets_ewma, 
                         fontsize=12, color=color_ewma)
+        # TM ARL0
+        plt.plot(x_arl0, best_arl0_tms[('ARL0', 'mean')], 'o-', color=color_tm, label='TM')
+        # Annotate with model parameters
+        for i, txt in enumerate(best_arl0_tms.loc[:, 'Model (Parameters)']):
+            plt.annotate(txt, (x_arl0[i], best_arl0_tms.loc[:, ('ARL0', 'mean')].iloc[i]) + offsets_tm, 
+                        fontsize=12, color=color_tm) 
+        # WM ARL0
+        plt.plot(x_arl0, best_arl0_wms[('ARL0', 'mean')], 'x-', color=color_wm, label='WM')
+        # Annotate with model parameters
+        for i, txt in enumerate(best_arl0_wms.loc[:, 'Model (Parameters)']):
+            plt.annotate(txt, (x_arl0[i], best_arl0_wms.loc[:, ('ARL0', 'mean')].iloc[i]) + offsets_wm, 
+                        fontsize=12, color=color_wm)   
+        # SWM ARL0
+        plt.plot(x_arl0, best_arl0_swms[('ARL0', 'mean')], 'o-', color=color_swm, label='SWM')
+        # Annotate with model parameters
+        for i, txt in enumerate(best_arl0_swms.loc[:, 'Model (Parameters)']):
+            plt.annotate(txt, (x_arl0[i], best_arl0_swms.loc[:, ('ARL0', 'mean')].iloc[i]) + offsets_swm, 
+                        fontsize=12, color=color_swm)
+        # CTM ARL0
+        plt.plot(x_arl0, best_arl0_ctms[('ARL0', 'mean')], 'x-', color=color_ctm, label='CTM')
+        # Annotate with model parameters
+        for i, txt in enumerate(best_arl0_ctms.loc[:, 'Model (Parameters)']):
+            plt.annotate(txt, (x_arl0[i], best_arl0_ctms.loc[:, ('ARL0', 'mean')].iloc[i]) + offsets_ctm, 
+                        fontsize=12, color=color_ctm) 
         if self.outlier_position is None:
-            plt.title('Mean $ARL_0$ of Optimal CUSUM/EWMA Models for Streaming Data Across Different Mean Gap Sizes (No Outliers)', fontsize=16)
+            plt.title('Mean $ARL_0$ of Optimal Models for Streaming Data Across Different Mean Gap Sizes (No Outliers)', fontsize=16)
         else:
-            plt.title(f'Mean $ARL_0$ of Optimal CUSUM/EWMA Models for Streaming Data Across Different Mean Gap Sizes (Outliers Present in {self.outlier_position} Period)', fontsize=16)
+            plt.title(f'Mean $ARL_0$ of Optimal Models for Streaming Data Across Different Mean Gap Sizes (Outliers Present in {self.outlier_position} Period)', fontsize=16)
         plt.xlabel('Gap Size', fontsize=14)
         plt.ylabel('$ARL_0$ mean', fontsize=14)
         plt.xticks(x_arl0, best_arl0_cusums['Gap Size'], fontsize=14)
@@ -822,10 +1215,34 @@ class GridDataEvaluate:
         for i, txt in enumerate(best_arl1_ewmas['Model (Parameters)']):
             plt.annotate(txt, (x_arl1[i], best_arl1_ewmas[('ARL1', 'mean')].iloc[i]) + offsets_ewma, 
                         fontsize=12, color=color_ewma)
+        # TM ARL1
+        plt.plot(x_arl1, best_arl1_tms[('ARL1', 'mean')], 'o-', color=color_tm, label='TM')
+        # Annotate with model parameters
+        for i, txt in enumerate(best_arl1_tms.loc[:, 'Model (Parameters)']):
+            plt.annotate(txt, (x_arl1[i], best_arl1_tms.loc[:, ('ARL1', 'mean')].iloc[i]) + offsets_tm, 
+                        fontsize=12, color=color_tm)            
+        # WM ARL1
+        plt.plot(x_arl1, best_arl1_wms[('ARL1', 'mean')], 'x-', color=color_wm, label='WM')
+        # Annotate with model parameters
+        for i, txt in enumerate(best_arl1_wms.loc[:, 'Model (Parameters)']):
+            plt.annotate(txt, (x_arl1[i], best_arl1_wms.loc[:, ('ARL1', 'mean')].iloc[i]) + offsets_wm, 
+                        fontsize=12, color=color_wm)    
+        # SWM ARL1
+        plt.plot(x_arl1, best_arl1_swms[('ARL1', 'mean')], 'o-', color=color_swm, label='SWM')
+        # Annotate with model parameters
+        for i, txt in enumerate(best_arl1_swms.loc[:, 'Model (Parameters)']):
+            plt.annotate(txt, (x_arl1[i], best_arl1_swms.loc[:, ('ARL1', 'mean')].iloc[i]) + offsets_swm, 
+                        fontsize=12, color=color_swm)
+        # CTM ARL1
+        plt.plot(x_arl1, best_arl1_ctms[('ARL1', 'mean')], 'x-', color=color_ctm, label='CTM')
+        # Annotate with model parameters
+        for i, txt in enumerate(best_arl1_ctms.loc[:, 'Model (Parameters)']):
+            plt.annotate(txt, (x_arl1[i], best_arl1_ctms.loc[:, ('ARL1', 'mean')].iloc[i]) + offsets_ctm, 
+                        fontsize=12, color=color_ctm)
         if self.outlier_position is None:
-            plt.title('Mean $ARL_1$ of Optimal CUSUM/EWMA Models for Streaming Data Across Different Mean Gap Sizes (No Outliers)', fontsize=16)
+            plt.title('Mean $ARL_1$ of Optimal Models for Streaming Data Across Different Mean Gap Sizes (No Outliers)', fontsize=16)
         else:
-            plt.title(f'Mean $ARL_1$ of Optimal CUSUM/EWMA Models for Streaming Data Across Different Mean Gap Sizes (Outliers Present in {self.outlier_position} Period)', fontsize=16)
+            plt.title(f'Mean $ARL_1$ of Optimal Models for Streaming Data Across Different Mean Gap Sizes (Outliers Present in {self.outlier_position} Period)', fontsize=16)
         plt.xlabel('Gap Size', fontsize=14)
         plt.ylabel('$ARL_1$ mean', fontsize=14)
         plt.xticks(x_arl1, best_arl1_cusums['Gap Size'], fontsize=14)
