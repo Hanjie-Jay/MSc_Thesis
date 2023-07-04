@@ -16,7 +16,7 @@ class OutlierInjector:
         in_control_var (float): The variance for in-control period of the streaming dataset.
         out_control_mean (float): The mean for out-of-control period of the streaming dataset.
         out_control_var (float): The variance for out-of-control period of the streaming dataset.
-        alpha (float): The threshold probability of occurrence for the outliers, should be between [0,1].
+        beta (float): The threshold probability of occurrence for the outliers, should be between [0,1].
         outlier_position (str): The position to insert outliers ('in-control', 'out-of-control', 'both_in_and_out', 'burn-in').
         outlier_ratio (float, optional): The ratio of data points of the given outlier position period to be considered outliers (default is 0.01, should be between (0,1)).
         in_control_mean (float, optional): The mean for in-control period of the streaming dataset(default is 0).
@@ -37,7 +37,7 @@ class OutlierInjector:
             Plotting function for visualising the original data and data with outliers.
     """
     def __init__(self, data:np.ndarray, n_sam_bef_cp:int, n_sam_aft_cp:int, burnin:int, in_control_var:float, 
-                 out_control_mean:float, out_control_var:float, alpha:float, outlier_position:str, 
+                 out_control_mean:float, out_control_var:float, beta:float, outlier_position:str, 
                  outlier_ratio:float=0.01, in_control_mean:float=0, asymmetric_ratio:float=0.1):
         # Define valid options
         valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
@@ -49,7 +49,7 @@ class OutlierInjector:
         assert isinstance(in_control_var, (int, float)) and in_control_var >= 0, f"{in_control_var} should be a non-negative number (int or float)."
         assert isinstance(out_control_mean, (int, float)), f"{out_control_mean} should be a number (int or float)."
         assert isinstance(out_control_var, (int, float)) and out_control_var >= 0, f"{out_control_var} should be a non-negative number (int or float)."
-        assert isinstance(alpha, float) and 0 <= alpha <= 1, f"{alpha} should be a float between [0,1]."
+        assert isinstance(beta, float) and 0 <= beta <= 1, f"{beta} should be a float between [0,1]."
         assert isinstance(outlier_ratio, float) and 0 < outlier_ratio < 1, f"{outlier_ratio} should be a float between (0,1)."
         assert isinstance(in_control_mean, (int, float)), f"{in_control_mean} should be a number (int or float)."
         assert isinstance(asymmetric_ratio, float) and 0 <= asymmetric_ratio <= 1, f"{asymmetric_ratio} should be a float between [0,1]."
@@ -73,7 +73,7 @@ class OutlierInjector:
         self.out_control_mean = out_control_mean
         self.out_control_var = out_control_var
         self.out_control_std = np.sqrt(out_control_var)
-        self.alpha = alpha
+        self.beta = beta
         self.outlier_ratio = outlier_ratio
         self.outlier_position = outlier_position
         self.asymmetric_ratio = asymmetric_ratio
@@ -81,15 +81,15 @@ class OutlierInjector:
 
     def calculate_thresholds(self):
         """
-        Calculate the in-control and out-of-control thresholds using the provided alpha level and mean and standard deviations.
+        Calculate the in-control and out-of-control thresholds using the provided beta level and mean and standard deviations.
 
         Returns:
         tuple: A tuple containing in-control and out-of-control lower and upper thresholds.
         """
-        in_control_lower_threshold = norm.ppf(self.alpha/2, loc=self.in_control_mean, scale=self.in_control_std)
-        in_control_upper_threshold = norm.ppf(1 - self.alpha/2, loc=self.in_control_mean, scale=self.in_control_std)
-        out_control_lower_threshold = norm.ppf(self.alpha/2, loc=self.out_control_mean, scale=self.out_control_std)
-        out_control_upper_threshold = norm.ppf(1 - self.alpha/2, loc=self.out_control_mean, scale=self.out_control_std)
+        in_control_lower_threshold = norm.ppf(self.beta/2, loc=self.in_control_mean, scale=self.in_control_std)
+        in_control_upper_threshold = norm.ppf(1 - self.beta/2, loc=self.in_control_mean, scale=self.in_control_std)
+        out_control_lower_threshold = norm.ppf(self.beta/2, loc=self.out_control_mean, scale=self.out_control_std)
+        out_control_upper_threshold = norm.ppf(1 - self.beta/2, loc=self.out_control_mean, scale=self.out_control_std)
         return in_control_lower_threshold, in_control_upper_threshold, out_control_lower_threshold, out_control_upper_threshold
 
     def add_outliers(self, num_outliers:int, indices:np.ndarray, lower_threshold:float, upper_threshold:float):
@@ -207,7 +207,7 @@ class OutlierInjector:
         plt.plot(self.data, color='#0F8291', label='Data with Outliers') # Dark Teal 
         plt.plot(self.original_data, color="#003E74", label='Original Data')  # Imperial Blue
         plt.scatter(self.outlier_indices, self.data[self.outlier_indices], color='#00A0C8', zorder=3, label='Outliers')  # Pool Blue
-        plt.axvspan(0, self.burnin-1, facecolor='#373A36', alpha=0.25)  # Cool Grey
+        plt.axvspan(0, self.burnin-1, facecolor='#373A36', beta=0.25)  # Cool Grey
         plt.axvline(x=self.burnin-1, color='#373A36', linestyle=':', label="End of Burn-in")  # Cool Grey
         if self.in_control_mean != self.out_control_mean:
             plt.axvline(x=self.n_sam_bef_cp, color='#DD2501', linestyle='--', label="Change Point")  # Red
@@ -229,14 +229,14 @@ class OutlierInjector:
 # variance = 4
 # burnin = 50
 # gap_size = 5
-# alpha = 0.001
+# beta = 0.001
 # valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
 # outlier_position = valid_positions[2]
 # outlier_ratio = 0.05
 # data_1 = np.append(np.random.normal(size=n_sam_bef_cp, scale=np.sqrt(variance)), 
 #                        np.random.normal(size=n_sam_aft_cp,loc=gap_size, scale=np.sqrt(variance)))
 # outinj = OutlierInjector(data_1.copy() ,n_sam_bef_cp, n_sam_aft_cp, burnin, variance, 
-#                          gap_size, variance, alpha, outlier_position, outlier_ratio)
+#                          gap_size, variance, beta, outlier_position, outlier_ratio)
 # out_data = outinj.insert_outliers()
 # outinj.outlier_indices
 # outinj.plot_data()

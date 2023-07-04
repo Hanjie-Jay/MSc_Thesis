@@ -684,23 +684,24 @@ class RobustMethods:
         """
         if self._current_ind < self.n:
             # Insert next values from the data stream for all three types
-            for win_data, sorted_data in zip([self._window_data_trimmed, self._window_data_winsorized, self._window_data_cosine],
-                                            [self._sorted_data_trimmed, self._sorted_data_winsorized, self._sorted_data_cosine]):
-                if len(win_data) == win_data.maxlen:
-                    old_value = win_data[0]
-                    sorted_data.remove(old_value)
-                win_data.append(self.x[self._current_ind])
-                insort(sorted_data, self.x[self._current_ind])
+            for win_data_attr, sorted_data_attr in zip(['_window_data_trimmed', '_window_data_winsorized', '_window_data_cosine'],
+                                                    ['_sorted_data_trimmed', '_sorted_data_winsorized', '_sorted_data_cosine']):
+                if hasattr(self, win_data_attr) and hasattr(self, sorted_data_attr):
+                    win_data = getattr(self, win_data_attr)
+                    sorted_data = getattr(self, sorted_data_attr)
+                    if len(win_data) == win_data.maxlen:
+                        old_value = win_data[0]
+                        sorted_data.remove(old_value)
+                    win_data.append(self.x[self._current_ind])
+                    insort(sorted_data, self.x[self._current_ind])
             self._current_ind += 1
         else:
-            # Reset all six deques
-            self._window_data_trimmed.clear()
-            self._window_data_winsorized.clear()
-            self._window_data_cosine.clear()
-            self._sorted_data_trimmed.clear()
-            self._sorted_data_winsorized.clear()
-            self._sorted_data_cosine.clear()
-    
+            # Reset all six deques if they exist
+            for attr in ['_window_data_trimmed', '_sorted_data_winsorized', '_window_data_cosine',
+                        '_sorted_data_trimmed', '_sorted_data_winsorized', '_sorted_data_cosine']:
+                if hasattr(self, attr):
+                    getattr(self, attr).clear()
+
     def compute_mean_sequence(self, trimmed_ratio:float, winsorized_ratio:float, cosine_ratio:float, 
                           trimmed_window_length:int, winsorized_window_length:int, cosine_window_length:int):
         """
@@ -725,48 +726,53 @@ class RobustMethods:
         Returns:
         robust_mean_seq (dict): A dictionary containing the mean sequences as numpy arrays for each method.
         """
-        self._window_data_trimmed = deque(maxlen=trimmed_window_length)
-        self._window_data_winsorized = deque(maxlen=winsorized_window_length)
-        self._window_data_cosine = deque(maxlen=cosine_window_length)
+        self._window_data_trimmed = deque(maxlen=trimmed_window_length) if trimmed_window_length else None
+        self._window_data_winsorized = deque(maxlen=winsorized_window_length) if winsorized_window_length else None
+        self._window_data_cosine = deque(maxlen=cosine_window_length) if cosine_window_length else None
+        
         if self._burnin_x is not None:
-            self._window_data_trimmed.extend(self._burnin_x[-trimmed_window_length:])
-            self._window_data_winsorized.extend(self._burnin_x[-winsorized_window_length:])
-            self._window_data_cosine.extend(self._burnin_x[-cosine_window_length:])
-            # Add it into the sorted list
-            self._sorted_data_trimmed = sorted(list(self._window_data_trimmed))
-            self._sorted_data_winsorized = sorted(list(self._window_data_winsorized))
-            self._sorted_data_cosine = sorted(list(self._window_data_cosine))
+            if trimmed_ratio is not None:
+                self._window_data_trimmed.extend(self._burnin_x[-trimmed_window_length:])
+                self._sorted_data_trimmed = sorted(list(self._window_data_trimmed))
+            if winsorized_ratio is not None:
+                self._window_data_winsorized.extend(self._burnin_x[-winsorized_window_length:])
+                self._sorted_data_winsorized = sorted(list(self._window_data_winsorized))
+            if cosine_ratio is not None:
+                self._window_data_cosine.extend(self._burnin_x[-cosine_window_length:])
+                self._sorted_data_cosine = sorted(list(self._window_data_cosine))
         else:
             self._sorted_data_trimmed = []
             self._sorted_data_winsorized = []
             self._sorted_data_cosine = []
+        
         mean_seqs = {
             "trimmed": {
                 "seq": [],
                 "ratio": trimmed_ratio,
                 "window_length": trimmed_window_length,
                 "compute_fn": self.__trimmed_mean
-            },
+            } if trimmed_ratio and trimmed_window_length else None,
             "winsorized": {
                 "seq": [],
                 "ratio": winsorized_ratio,
                 "window_length": winsorized_window_length,
                 "compute_fn": self.__winsorized_mean
-            },
+            } if winsorized_ratio and winsorized_window_length else None,
             "cosine": {
                 "seq": [],
                 "ratio": cosine_ratio,
                 "window_length": cosine_window_length,
                 "compute_fn": self.__cosine_tapered_mean
-            }
+            } if cosine_ratio and cosine_window_length else None
         }
         for _ in range(self.n):
             self.__insert_next_val_and_sort()
-            for mean_type, method in mean_seqs.items():
-                if method["ratio"] is not None:
+            # Compute all three types of means if necessary
+            for method in mean_seqs.values():
+                if method is not None:
                     mean_value = method["compute_fn"](method["ratio"], method["window_length"])
                     method["seq"].append(mean_value)
-        robust_mean_seq = {mean_type: np.array(method["seq"]) for mean_type, method in mean_seqs.items()}
+        robust_mean_seq = {mean_type: np.array(method["seq"]) for mean_type, method in mean_seqs.items() if method is not None}
         return robust_mean_seq
 
     def compute_variance_sequence(self, winsorized_ratio:float):

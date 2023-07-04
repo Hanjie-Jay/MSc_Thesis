@@ -19,11 +19,46 @@ from ARLFunc import arl_cusum, arl_ewma, arl_robust_mean, combine_alert_ind, com
 
 importlib.reload(GridEvaluation)
 from GridEvaluation import GridDataEvaluate, simulate_stream_data, stream_data_plot
+
 importlib.reload(Outliers)
 from Outliers import OutlierInjector
 
 importlib.reload(ControlChartFunc)
 from ControlChartFunc import RobustMethods, ControlChart
+
+
+# ------------------Testing function for the arl_robust_mean function-------------------
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', 400)
+# Setup initial values
+n_sam_bef_cp = 500
+n_sam_aft_cp = 400
+gap_sizes = [1, 5, 10]
+variances = [1, 4, 9]
+# seeds = [111, 222, 333, 666, 999]
+seeds = [111, 666, 999]
+BURNIN = 100
+cusum_params_list = [(1.50, 1.61), (1.25, 1.99), (1.00, 2.52), (0.75, 3.34), (0.50, 4.77), (0.25, 8.01)]
+ewma_params_list = [(1.00,3.090),(0.75,3.087),(0.50,3.071),(0.40,3.054),(0.30,3.023),(0.25,2.998),(0.20,2.962),(0.10,2.814),(0.05,2.615),(0.03,2.437)]
+# z_list = [1.6449, 1.96, 2.5759]
+# alpha_list = [1, 1.5, 2, 2.5, 3]
+z_list = [1.6449, 1.96]
+alpha_list = [1.5, 2, 2.5]
+tm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
+wm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
+swm_params_list = [10, 15, 20, 25, 30]
+ctm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
+valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
+outlier_position = valid_positions[2]
+beta = 1e-5
+outlier_ratio = 0.05
+asymmetric_ratio = 0.25
+# simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
+grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, 
+                            seeds, BURNIN, cusum_params_list, ewma_params_list, z_list, alpha_list,
+                             tm_params_list, wm_params_list, swm_params_list, ctm_params_list, 
+                             outlier_position, beta, outlier_ratio, asymmetric_ratio)
+rob_per_table, rob_per_summary = grideval.grid_robust_params_eval()
 
 # ------------------Testing function for the arl_robust_mean function-------------------
 burnin = 50
@@ -67,7 +102,12 @@ robust_arl_results_out = arl_robust_mean(out_data, burnin, window_length, trimme
 # ------------------Testing function for the new ControlChart class with robust method-------------------
 data_mean = 0
 std_dev = 1
-prob_gt_3sigma_non_standard = 1 - norm.cdf(3*std_dev + data_mean, loc=data_mean, scale=std_dev)
+alpha = 3
+1 - (2 * (1 - norm.cdf(alpha * std_dev + data_mean, loc=data_mean, scale=std_dev))) # prob_a_sigma_normal
+
+probability = 0.995
+norm.ppf(probability, loc=data_mean, scale=std_dev)
+
 # data with no outliers
 burnin = 30
 burnin_data = np.random.normal(size=burnin)
@@ -177,7 +217,7 @@ ewma_params_list = [(1.00,3.090),(0.75,3.087),(0.50,3.071),(0.40,3.054),(0.30,3.
 # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
 grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, 
                             seeds, BURNIN, cusum_params_list, ewma_params_list, None)
-per_table, per_summary = grideval.grid_params_eval()
+per_table, per_summary = grideval.grid_C_E_params_eval()
 
 per_summary
 per_table
@@ -208,7 +248,7 @@ asymmetric_ratio = 0.25
 # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
 grideval_outliers = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, seeds, BURNIN,
                              cusum_params_list, ewma_params_list, outlier_position, alpha, outlier_ratio, asymmetric_ratio)
-per_table, per_summary = grideval_outliers.grid_params_eval()
+per_table, per_summary = grideval_outliers.grid_C_E_params_eval()
 grideval_outliers.plot_ARL0_graphs(save=True)
 grideval_outliers.plot_ARL1_graphs(save=True)
 grideval_outliers.plot_best_models(save=True)

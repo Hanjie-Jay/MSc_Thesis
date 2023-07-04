@@ -167,13 +167,13 @@ def arl_robust_mean(data:np.ndarray, burnin:int, median_window_length:int, trimm
     assert (true_cp is None or (isinstance(true_cp, int) and true_cp >=0)), f"true_cp ({true_cp}) must be a non-negative integer or None"
     if true_cp is not None:
         assert burnin < true_cp, f"Value of burnin:{burnin} should smaller than true_cp:{true_cp}"
-    assert (median_window_length is None or isinstance(median_window_length, int)) and 0 < median_window_length <= data_len, f"Median window length={median_window_length} must be an positive integer less than or equal to the number of observations={data_len-burnin}"
-    assert (trimmed_ratio is None or isinstance(trimmed_ratio, (int, float))) and 0 <= trimmed_ratio <= 1, f"trimmed_ratio={trimmed_ratio} must be a float in the range [0, 1]"        
-    assert (winsorized_ratio is None or isinstance(winsorized_ratio, (int, float))) and 0 <= winsorized_ratio <= 1, f"winsorized_ratio={winsorized_ratio} must be a float in the range [0, 1]"        
-    assert (cosine_ratio is None or isinstance(cosine_ratio, (int, float))) and 0 <= cosine_ratio <= 1, f"cosine_ratio={cosine_ratio} must be a float in the range [0, 1]"            
-    assert (trimmed_window_length is None or isinstance(trimmed_window_length, int)) and 0 < trimmed_window_length <= data_len, f"Trimmed window length={trimmed_window_length} must be an positive integer less than or equal to the number of observations={data_len-burnin}"
-    assert (winsorized_window_length is None or isinstance(winsorized_window_length, int)) and 0 < winsorized_window_length <= data_len, f"Winsorized window length={winsorized_window_length} must be an positive integer less than or equal to the number of observations={data_len-burnin}"
-    assert (cosine_window_length is None or isinstance(cosine_window_length, int)) and 0 < cosine_window_length <= data_len, f"Cosine Tapered window length={cosine_window_length} must be an positive integer less than or equal to the number of observations={data_len-burnin}"
+    assert (median_window_length is None or (isinstance(median_window_length, int) and 0 < median_window_length <= data_len)), f"Median window length={median_window_length} must be an positive integer less than or equal to the number of observations={data_len-burnin}"
+    assert (trimmed_ratio is None or (isinstance(trimmed_ratio, (int, float)) and 0 <= trimmed_ratio <= 1)), f"trimmed_ratio={trimmed_ratio} must be a float in the range [0, 1]"        
+    assert (winsorized_ratio is None or (isinstance(winsorized_ratio, (int, float)) and 0 <= winsorized_ratio <= 1)), f"winsorized_ratio={winsorized_ratio} must be a float in the range [0, 1]"        
+    assert (cosine_ratio is None or (isinstance(cosine_ratio, (int, float)) and 0 <= cosine_ratio <= 1)), f"cosine_ratio={cosine_ratio} must be a float in the range [0, 1]"            
+    assert (trimmed_window_length is None or (isinstance(trimmed_window_length, int) and 0 < trimmed_window_length <= data_len)), f"Trimmed window length={trimmed_window_length} must be an positive integer less than or equal to the number of observations={data_len-burnin}"
+    assert (winsorized_window_length is None or (isinstance(winsorized_window_length, int) and 0 < winsorized_window_length <= data_len)), f"Winsorized window length={winsorized_window_length} must be an positive integer less than or equal to the number of observations={data_len-burnin}"
+    assert (cosine_window_length is None or (isinstance(cosine_window_length, int) and 0 < cosine_window_length <= data_len)), f"Cosine Tapered window length={cosine_window_length} must be an positive integer less than or equal to the number of observations={data_len-burnin}"
     if burnin >= data_len:
         raise ValueError(f"Burnin period ({burnin}) must be less than the length of the data ({data_len})")
     data_burnin_est = Normal_Mean_Var_Estimator(data[:burnin])
@@ -191,25 +191,25 @@ def arl_robust_mean(data:np.ndarray, burnin:int, median_window_length:int, trimm
     if median_window_length is not None:
         _, _, swm_au, swm_al = data_cc.sliding_window_median_CI_val(z_val, h_val, data_mean_burnin, data_sd_burnin)
         swm_alert_ind = combine_alert_ind(swm_au, swm_al, burnin)
-        results["swm_arl0"] = compute_arl0(swm_alert_ind, true_cp, data_len)
-        results["swm_arl1"] = compute_arl1(swm_alert_ind, true_cp, data_len)
+        results["SWM"] = {"arl0": compute_arl0(swm_alert_ind, true_cp, data_len), 
+                          "arl1": compute_arl1(swm_alert_ind, true_cp, data_len)}
     # ARL for sliding window trimmed mean confidence interval
     if trimmed_ratio is not None:
         _, _, tm_au, tm_al = data_cc.trimmed_mean_CI_val(z_val, h_val, data_mean_burnin, data_sd_burnin)
         tm_alert_ind = combine_alert_ind(tm_au, tm_al, burnin)
-        results["tm_arl0"] = compute_arl0(tm_alert_ind, true_cp, data_len)
-        results["tm_arl1"] = compute_arl1(tm_alert_ind, true_cp, data_len)
+        results["TM"] = {"arl0": compute_arl0(tm_alert_ind, true_cp, data_len), 
+                         "arl1": compute_arl1(tm_alert_ind, true_cp, data_len)}
     # ARL for sliding window winsorized mean confidence interval
     if winsorized_ratio is not None:
         _, _, wm_au, wm_al = data_cc.winsorized_mean_CI_val(z_val, h_val, data_mean_burnin, data_sd_burnin)
         wm_alert_ind = combine_alert_ind(wm_au, wm_al, burnin)
-        results["wm_arl0"] = compute_arl0(wm_alert_ind, true_cp, data_len)
-        results["wm_arl1"] = compute_arl1(wm_alert_ind, true_cp, data_len)
+        results["WM"] = {"arl0": compute_arl0(wm_alert_ind, true_cp, data_len), 
+                         "arl1": compute_arl1(wm_alert_ind, true_cp, data_len)}
     # ARL for sliding window cosine taper mean confidence interval
     if cosine_ratio is not None:
         _, _, ctm_au, ctm_al = data_cc.cosine_tapered_mean_CI_val(z_val, h_val, data_mean_burnin, data_sd_burnin)
         ctm_alert_ind = combine_alert_ind(ctm_au, ctm_al, burnin)
-        results["ctm_arl0"] = compute_arl0(ctm_alert_ind, true_cp, data_len)
-        results["ctm_arl1"] = compute_arl1(ctm_alert_ind, true_cp, data_len)
+        results["CTM"] = {"arl0": compute_arl0(ctm_alert_ind, true_cp, data_len), 
+                          "arl1": compute_arl1(ctm_alert_ind, true_cp, data_len)}
 
     return results

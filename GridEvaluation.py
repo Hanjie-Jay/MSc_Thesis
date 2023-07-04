@@ -3,8 +3,9 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from ARLFunc import arl_cusum, arl_ewma
+from ARLFunc import arl_cusum, arl_ewma, arl_robust_mean
 from Outliers import OutlierInjector
+from itertools import product
 
 
 class GridDataEvaluate:
@@ -22,7 +23,7 @@ class GridDataEvaluate:
         cusum_params_list (list): List of parameter pairs (cusum_k, cusum_h) for the CUSUM model.
         ewma_params_list (list): List of parameter pairs (ewma_rho, ewma_k) for the EWMA model.
         outlier_position (None or str): The position to insert outliers ('in-control', 'out-of-control', 'both_in_and_out', 'burn-in').
-        alpha (float, optional): The threshold probability of occurrence for the outliers (default is None, should between (0,1)).
+        beta (float, optional): The threshold probability of occurrence for the outliers (default is None, should between (0,1)).
         outlier_ratio (float, optional): The ratio of data points of the given outlier position period to be considered outliers (default is None, should be between (0,1)).
         asymmetric_ratio (float, optimal): The ratio for adding a asymmetric outliers above the mean (default is 0.1, should be between [0,1]).
         
@@ -31,17 +32,20 @@ class GridDataEvaluate:
             Simulates grid data that have no outlier for the provided parameters.
         generate_with_outliers_grid_data():
             Simulates grid data that have outliers for the provided parameters.
-        grid_params_eval():
-            Evaluates the performance of control charts with different parameters by calculating the ARLs.
-        plot_ARL0_graphs(each_G:bool, each_G_V:bool, all_CUSUM:bool, each_CUSUM:bool, all_EWMA:bool, each_EWMA:bool):
+        grid_C_E_params_eval():
+            Evaluates the performance of CUSUM and EWMA control charts with different parameters by calculating the ARLs.
+        grid_robust_params_eval():
+            Evaluates the performance of trimmed mean, winsorized mean, sliding window median and cosine tapered mean control chart with different parameters by calculating the ARLs.
+        plot_C_E_ARL0_graphs(each_G:bool, each_G_V:bool, all_CUSUM:bool, each_CUSUM:bool, all_EWMA:bool, each_EWMA:bool):
             Plots different types of box plots to visualize ARL0 values under various conditions.
-        plot_ARL1_graphs():
+        plot_C_E_ARL1_graphs():
             Plot function for ARL1. Specific parameters to be provided based on implementation.
         plot_best_models():
             Plot function for best models of CUSUM and EWMA w.r.t. ARL0 and ARL1 values.
     """
     def __init__(self, n_sam_bef_cp:int, n_sam_aft_cp:int, gap_sizes:list, variances:list,  seeds:list, burnin:int, 
-                 cusum_params_list:list, ewma_params_list:list, outlier_position:str, alpha:float=None, 
+                 cusum_params_list:list, ewma_params_list:list, z_list:list, alpha_list:list, tm_params_list:list, wm_params_list:list,
+                 swm_params_list: list, ctm_params_list: list, outlier_position:str, beta:float=None, 
                  outlier_ratio:float=None, asymmetric_ratio:float=0.1):
         assert isinstance(n_sam_bef_cp, int) and n_sam_bef_cp > 0, f"n_sam_bef_cp:{n_sam_bef_cp} must be a positive integer"
         assert isinstance(n_sam_aft_cp, int) and n_sam_aft_cp > 0, f"n_sam_aft_cp:{n_sam_aft_cp} must be a positive integer"
@@ -52,10 +56,16 @@ class GridDataEvaluate:
         assert burnin < n_sam_bef_cp, f"Value of burnin:{burnin} should smaller than n_sam_bef_cp:{n_sam_bef_cp}"
         assert isinstance(cusum_params_list, list) and all(isinstance(i, tuple) and len(i)==2 for i in cusum_params_list), f"cusum_params_list:{cusum_params_list} must be a list of tuples each of size 2"
         assert isinstance(ewma_params_list, list) and all(isinstance(i, tuple) and len(i)==2 for i in ewma_params_list), f"ewma_params_list:{ewma_params_list} must be a list of tuples each of size 2"
+        assert isinstance(z_list, list) and all(isinstance(i, (float, int))  for i in z_list), f"z_list:{z_list} must be a list of floats or ints"
+        assert isinstance(alpha_list, list) and all(isinstance(i, (float, int))  for i in alpha_list), f"alpha_list:{alpha_list} must be a list of floats or ints"
+        assert isinstance(tm_params_list, list) and all(isinstance(i, tuple) and len(i)==2 for i in tm_params_list), f"tm_params_list:{tm_params_list} must be a list of tuples each of size 2"
+        assert isinstance(wm_params_list, list) and all(isinstance(i, tuple) and len(i)==2 for i in wm_params_list), f"wm_params_list:{wm_params_list} must be a list of tuples each of size 2"
+        assert isinstance(swm_params_list, list) and all(isinstance(i, int) for i in swm_params_list), f"swm_params_list:{swm_params_list} must be a list of ints each of size 1"
+        assert isinstance(ctm_params_list, list) and all(isinstance(i, tuple) and len(i)==2 for i in ctm_params_list), f"ctm_params_list:{ctm_params_list} must be a list of tuples each of size 2"
         assert outlier_position is None or isinstance(outlier_position, str), f"outlier_position:{outlier_position} must be either None or a string"
         valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
         if outlier_position is not None:
-            assert alpha is None or (isinstance(alpha, float) and 0 < alpha < 1), f"alpha:{alpha} must be a float within the range [0,1]"
+            assert beta is None or (isinstance(beta, float) and 0 < beta < 1), f"beta:{beta} must be a float within the range [0,1]"
             assert outlier_ratio is None or (isinstance(outlier_ratio, float) and 0 < outlier_ratio < 1), f"outlier_ratio:{outlier_ratio} must be a float within the range (0,1)"
             assert isinstance(asymmetric_ratio, float) and 0 <= asymmetric_ratio <= 1, f"{asymmetric_ratio} should be a float between [0,1]."
             if isinstance(outlier_position, str):
@@ -71,8 +81,14 @@ class GridDataEvaluate:
         self.burnin = burnin
         self.cusum_params_list = cusum_params_list
         self.ewma_params_list = ewma_params_list
+        self.z_list = z_list
+        self.alpha_list = alpha_list
+        self.tm_params_list = tm_params_list
+        self.wm_params_list = wm_params_list
+        self.swm_params_list = swm_params_list
+        self.ctm_params_list = ctm_params_list
         self.outlier_position = outlier_position
-        self.alpha = alpha
+        self.beta = beta
         self.outlier_ratio = outlier_ratio
         self.asymmetric_ratio = asymmetric_ratio
 
@@ -130,7 +146,7 @@ class GridDataEvaluate:
         for variance in self.variances:
             data_without_outliers = np.random.normal(scale=np.sqrt(variance),size=self.n_sam_bef_cp + self.n_sam_aft_cp)
             outinj = OutlierInjector(data_without_outliers, self.n_sam_bef_cp, self.n_sam_aft_cp, self.burnin, variance, 0, variance, 
-                                    self.alpha, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position,
+                                    self.beta, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position,
                                     asymmetric_ratio=self.asymmetric_ratio)
             data_with_outliers = outinj.insert_outliers()
             simulate_data_list.append((data_with_outliers, None, 0, variance, outinj.outlier_indices)) # extra list of outlier indices
@@ -141,7 +157,7 @@ class GridDataEvaluate:
                 data_with_increase = np.append(np.random.normal(size=self.n_sam_bef_cp, scale=np.sqrt(variance)), 
                                         np.random.normal(loc=gap_size, scale=np.sqrt(variance), size=self.n_sam_aft_cp))
                 outinj = OutlierInjector(data_with_increase, self.n_sam_bef_cp, self.n_sam_aft_cp, self.burnin, variance, gap_size, 
-                                    variance, self.alpha, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position,
+                                    variance, self.beta, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position,
                                     asymmetric_ratio=self.asymmetric_ratio)
                 data_with_increase_outliers = outinj.insert_outliers()
                 simulate_data_list.append((data_with_increase_outliers, self.n_sam_bef_cp, gap_size, variance, outinj.outlier_indices))
@@ -149,13 +165,13 @@ class GridDataEvaluate:
                 data_with_decrease = np.append(np.random.normal(size=self.n_sam_bef_cp, scale=np.sqrt(variance)), 
                                         np.random.normal(loc=-gap_size, scale=np.sqrt(variance), size=self.n_sam_aft_cp))
                 outinj = OutlierInjector(data_with_decrease, self.n_sam_bef_cp, self.n_sam_aft_cp, self.burnin, variance, -gap_size, 
-                                    variance, self.alpha, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position,
+                                    variance, self.beta, outlier_ratio=self.outlier_ratio, outlier_position=self.outlier_position,
                                     asymmetric_ratio=self.asymmetric_ratio)
                 data_with_decrease_outliers = outinj.insert_outliers()
                 simulate_data_list.append((data_with_decrease_outliers, self.n_sam_bef_cp, -gap_size, variance, outinj.outlier_indices))
         return simulate_data_list
 
-    def grid_params_eval(self):
+    def grid_C_E_params_eval(self):
         """
         Computes the mean and standard deviation of average run lengths (ARLs) for both CUSUM and EWMA models
         across a variety of data parameters, including mean gap size and variance. This is done for multiple 
@@ -209,11 +225,126 @@ class GridDataEvaluate:
         performance_table['Data Var'] = pd.to_numeric(performance_table['Data Var'])
         # Take absolute value of gap size
         performance_table['Gap Size'] = performance_table['Gap Size'].abs()
-        self.performance_table = performance_table
-        self.performance_summary = performance_summary
+        self.C_E_performance_table = performance_table
+        self.C_E_performance_summary = performance_summary
+        return performance_table, performance_summary.round(4) # 4 decimal places
+    
+    def grid_robust_params_eval(self):
+        """
+        The method computes the average run lengths (ARLs) for various robust models across different data parameters 
+        including mean gap size and variance, for multiple seeds to include variability in data generation. 
+
+        The process starts by creating the Cartesian product of the z and alpha values, to iterate over all possible
+        combinations. All parameters lists are then made of equal length for ease of iteration, and the data 
+        are generated with or without outliers as per the user's specification.
+
+        For each combination of data, z and alpha values, and control parameters, the ARLs are computed for each model and 
+        stored in a list.
+
+        A Pandas DataFrame is created from the list of ARLs, including the model parameters, z and alpha values,
+        data characteristics, ARL0, ARL1, and seed.
+
+        The DataFrame is then grouped by data characteristics, z and alpha values, and model parameters, and 
+        the mean and standard deviation of ARL0 and ARL1 are computed.
+
+        Gap size and variance are extracted from the 'Data' column of the DataFrame and converted to numeric format.
+
+        Parameters:
+        None
+
+        Returns:
+        performance_table (DataFrame): A DataFrame containing the ARL values for each model, data characteristics,
+        z and alpha values, and seed. Also includes an 'outlier_ind' column if data are generated with outliers.
+        
+        performance_summary (DataFrame): A DataFrame summarizing the mean and standard deviation of ARL0 and ARL1
+        for each combination of data characteristics, z and alpha values, and model parameters. The DataFrame is
+        rounded to four decimal places for readability.
+        """
+        arl_values = []
+        z_alpha_list = list(product(self.z_list, self.alpha_list))
+        max_len = max(len(self.tm_params_list), len(self.wm_params_list), len(self.swm_params_list), len(self.ctm_params_list))
+        # Extend the parameters lists with None to make them of equal length
+        tm_params_list = self.tm_params_list + [None]*(max_len-len(self.tm_params_list))
+        wm_params_list = self.wm_params_list + [None]*(max_len-len(self.wm_params_list))
+        swm_params_list = self.swm_params_list + [None]*(max_len-len(self.swm_params_list))
+        ctm_params_list = self.ctm_params_list + [None]*(max_len-len(self.ctm_params_list))
+        for seed in self.seeds:
+            if self.outlier_position is None:
+                simulate_data_list = self.generate_no_outlier_grid_data(seed) # simulate data
+                for data, true_cp, gap_size, variance in simulate_data_list:
+                    for z, alpha in z_alpha_list:
+                        for i in range(max_len):
+                            tm_params = tm_params_list[i]
+                            wm_params = wm_params_list[i]
+                            swm_params = swm_params_list[i]
+                            ctm_params = ctm_params_list[i]
+                            method_params = {
+                                'TM': tm_params,
+                                'WM': wm_params,
+                                'SWM': swm_params,
+                                'CTM': ctm_params
+                            }
+                            results = arl_robust_mean(
+                                data, self.burnin, swm_params, 
+                                tm_params[0] if swm_params is not None else None, wm_params[0] if wm_params is not None else None, 
+                                ctm_params[0] if ctm_params is not None else None, tm_params[1] if swm_params is not None else None, 
+                                wm_params[1] if wm_params is not None else None, ctm_params[1] if ctm_params is not None else None, 
+                                z, alpha, true_cp)
+                            for method, method_arl in results.items():
+                                arl0 = method_arl['arl0']
+                                arl1 = method_arl['arl1']
+                                params = method_params[method]
+                                arl_values.append((f'{method} ({params})', f'z:{z} alpha:{alpha}', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed))
+            else:
+                simulate_data_list = self.generate_with_outliers_grid_data(seed) # simulate data with outliers
+                for data, true_cp, gap_size, variance, outlier_ind in simulate_data_list:
+                    for z, alpha in z_alpha_list:
+                        for i in range(max_len):
+                            tm_params = tm_params_list[i]
+                            wm_params = wm_params_list[i]
+                            swm_params = swm_params_list[i]
+                            ctm_params = ctm_params_list[i]
+                            method_params = {
+                                'TM': tm_params,
+                                'WM': wm_params,
+                                'SWM': swm_params,
+                                'CTM': ctm_params
+                            }
+                            results = arl_robust_mean(
+                                data, self.burnin, swm_params, 
+                                tm_params[0] if swm_params is not None else None, wm_params[0] if wm_params is not None else None, 
+                                ctm_params[0] if ctm_params is not None else None, tm_params[1] if swm_params is not None else None, 
+                                wm_params[1] if wm_params is not None else None, ctm_params[1] if ctm_params is not None else None, 
+                                z, alpha, true_cp)
+                            for method, method_arl in results.items():
+                                arl0 = method_arl['arl0']
+                                arl1 = method_arl['arl1']
+                                params = method_params[method]
+                                arl_values.append((f'{method} ({params})', f'z:{z} alpha:{alpha}', f'MG:{gap_size} Var:{variance}', arl0, arl1, seed, outlier_ind))
+
+        # transform the data into pandas dataframe and compute the mean and variance using groupby
+        if self.outlier_position is None:
+            performance_table = pd.DataFrame(arl_values, columns=['Model (Parameters)', 'z and alpha',
+                                                                  f'Data (len:{self.n_sam_aft_cp+self.n_sam_bef_cp}, TCP:{self.n_sam_bef_cp})', 
+                                                                  'ARL0', 'ARL1', 'seed'])
+        else:
+            performance_table = pd.DataFrame(arl_values, columns=['Model (Parameters)', 'z and alpha',
+                                                                  f'Data (len:{self.n_sam_aft_cp+self.n_sam_bef_cp}, TCP:{self.n_sam_bef_cp})', 
+                                                                  'ARL0', 'ARL1', 'seed', 'outlier_ind'])
+        performance_summary = performance_table.groupby([f'Data (len:{self.n_sam_aft_cp+self.n_sam_bef_cp}, TCP:{self.n_sam_bef_cp})', 'z and alpha',
+                                                        'Model (Parameters)']).agg({'ARL0':['mean', 'std'], 'ARL1':['mean', 'std']}).reset_index()
+        # extract gap size and variance from 'Data' column
+        performance_table[['Gap Size', 'Data Var']] = performance_table[f'Data (len:{self.n_sam_aft_cp+self.n_sam_bef_cp}, TCP:{self.n_sam_bef_cp})'].str.extract('MG:(-?\d+) Var:(\d+)')
+        # Convert 'Gap Size' and 'Variance' to numeric
+        performance_table['Gap Size'] = pd.to_numeric(performance_table['Gap Size'])
+        performance_table['Data Var'] = pd.to_numeric(performance_table['Data Var'])
+        # Take absolute value of gap size
+        performance_table['Gap Size'] = performance_table['Gap Size'].abs()
+        self.robust_performance_table = performance_table
+        self.robust_performance_summary = performance_summary
         return performance_table, performance_summary.round(4) # 4 decimal places
 
-    def plot_ARL0_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_CUSUM:bool=True, each_CUSUM:bool=True, all_EWMA:bool=True, each_EWMA:bool=True, dpi:int=500):
+    def plot_C_E_ARL0_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_CUSUM:bool=True, each_CUSUM:bool=True, all_EWMA:bool=True, each_EWMA:bool=True, dpi:int=500):
         """
         This function creates different types of box plots to visualize ARL0 values for different conditions.
         
@@ -230,9 +361,9 @@ class GridDataEvaluate:
         Returns:
         None: The function generates plots
         """
-        if not hasattr(self, 'performance_table'):
-            self.grid_params_eval()
-        per_table = self.performance_table
+        if not hasattr(self, 'C_E_performance_table'):
+            self.grid_C_E_params_eval()
+        per_table = self.C_E_performance_table
         # Assertions to validate input data types
         assert isinstance(save, bool), f"The save:{save} parameter must be a boolean."
         assert isinstance(per_table, pd.DataFrame), "per_table must be a pandas DataFrame."
@@ -399,7 +530,7 @@ class GridDataEvaluate:
                     plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
                 plt.show()
 
-    def plot_ARL1_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_CUSUM:bool=True, each_CUSUM:bool=True, all_EWMA:bool=True, each_EWMA:bool=True, dpi:int=500):
+    def plot_C_E_ARL1_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_CUSUM:bool=True, each_CUSUM:bool=True, all_EWMA:bool=True, each_EWMA:bool=True, dpi:int=500):
         """
         This function creates different types of box plots to visualize ARL1 values for different conditions.
         
@@ -416,9 +547,9 @@ class GridDataEvaluate:
         Returns:
         None: The function generates plots
         """
-        if not hasattr(self, 'performance_table'):
-                self.grid_params_eval()
-        per_table = self.performance_table
+        if not hasattr(self, 'C_E_performance_table'):
+                self.grid_C_E_params_eval()
+        per_table = self.C_E_performance_table
         # Assertions to validate input data types
         assert isinstance(save, bool), "The save parameter must be a boolean."
         assert isinstance(per_table, pd.DataFrame), "per_table must be a pandas DataFrame."
@@ -598,9 +729,9 @@ class GridDataEvaluate:
         Returns:
         None: The function generates plots
         """
-        if not hasattr(self, 'performance_table'):
-            self.grid_params_eval()
-        per_table = self.performance_table
+        if not hasattr(self, 'C_E_performance_table'):
+            self.grid_C_E_params_eval()
+        per_table = self.C_E_performance_table
         # Assert that input is a pandas DataFrame
         assert isinstance(save, bool), "The save parameter must be a boolean."
         assert isinstance(dpi, int) and dpi > 0, f"The dpi:{dpi} parameter must be a positive integer."
@@ -706,7 +837,7 @@ class GridDataEvaluate:
             plt.savefig(save_path, dpi=dpi)
         plt.show()
 
-# ------------------Testing function for grid_params_eval function without outlier-------------------
+# ------------------Testing function for grid_C_E_params_eval function without outlier-------------------
 # # For displaying the full pd.df
 # pd.set_option('display.max_columns', None)
 # pd.set_option('display.max_rows', 200)
@@ -722,13 +853,13 @@ class GridDataEvaluate:
 # # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
 # grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, 
 #                             seeds, BURNIN, cusum_params_list, ewma_params_list, None)
-# per_table, per_summary = grideval.grid_params_eval()
+# per_table, per_summary = grideval.grid_C_E_params_eval()
 
 # per_summary
 # per_table
 
-# grideval.plot_ARL0_graphs(save=True)
-# grideval.plot_ARL1_graphs(save=True)
+# grideval.plot_C_E_ARL0_graphs(save=True)
+# grideval.plot_C_E_ARL1_graphs(save=True)
 # grideval.plot_best_models(save=True)
 # ------------------End-------------------
 
@@ -745,15 +876,15 @@ class GridDataEvaluate:
 # ewma_params_list = [(1.00,3.090),(0.75,3.087),(0.50,3.071),(0.40,3.054),(0.30,3.023),(0.25,2.998),(0.20,2.962),(0.10,2.814),(0.05,2.615),(0.03,2.437)]
 # valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
 # outlier_position = valid_positions[0]
-# alpha = 1e-5
+# beta = 1e-5
 # outlier_ratio = 0.05
 # asymmetric_ratio = 0.25
 # # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
 # grideval_outliers = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, seeds, BURNIN,
 #                              cusum_params_list, ewma_params_list, outlier_position, alpha, outlier_ratio, asymmetric_ratio)
-# per_table, per_summary = grideval_outliers.grid_params_eval()
-# grideval_outliers.plot_ARL0_graphs(save=True)
-# grideval_outliers.plot_ARL1_graphs(save=True)
+# per_table, per_summary = grideval_outliers.grid_C_E_params_eval()
+# grideval_outliers.plot_C_E_ARL0_graphs(save=True)
+# grideval_outliers.plot_C_E_ARL1_graphs(save=True)
 # grideval_outliers.plot_best_models(save=True)
 # outlier_grid_data = grideval_outliers.generate_with_outliers_grid_data(seeds[0])
 # outlier_grid_data[0][0].shape
