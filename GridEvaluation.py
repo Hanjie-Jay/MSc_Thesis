@@ -412,9 +412,9 @@ class GridDataEvaluate:
                 plt.xticks(rotation=30)
                 if save:
                     # Define the filename based on the specific graph parameters.
-                    filename = f"arl0_gap_{gap_size}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    filename = f"arl0_gap_{gap_size}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                     plt.tight_layout()
-                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='pdf')
                 plt.show()
 
         # Create a boxplot for each gap size and variance size
@@ -439,9 +439,9 @@ class GridDataEvaluate:
                     plt.xticks(rotation=30)
                     if save:
                         # Define the filename based on the specific graph parameters.
-                        filename = f"arl0_gap_{gap_size}_var{vari}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        filename = f"arl0_gap_{gap_size}_var{vari}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                         plt.tight_layout()
-                        plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                        plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='pdf')
                     plt.show()
 
         # Create box plots for CUSUM model
@@ -457,9 +457,9 @@ class GridDataEvaluate:
             plt.ylabel('$ARL_0$', fontsize=14)
             plt.xlabel('Gap Size', fontsize=14)
             if save:
-                filename = f"arl0_all_cusum_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                filename = f"arl0_all_cusum_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                 plt.tight_layout()
-                plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
+                plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='pdf')
             plt.show()
 
         # Create box plots for EWMA model
@@ -475,9 +475,9 @@ class GridDataEvaluate:
             plt.ylabel('$ARL_0$', fontsize=14)
             plt.xlabel('Gap Size', fontsize=14)
             if save:
-                filename = f"arl0_all_ewma_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                filename = f"arl0_all_ewma_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                 plt.tight_layout()
-                plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
+                plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='pdf')
             plt.show()
 
         # Loop through each unique model parameters for CUSUM and create box plot
@@ -500,9 +500,9 @@ class GridDataEvaluate:
                 plt.xlabel('Gap Size', fontsize=14)
                 if save:
                     # Define the filename based on the specific graph parameters.
-                    filename = f"arl0_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    filename = f"arl0_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                     plt.tight_layout()
-                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='pdf')
                 plt.show()
 
         # Loop through each unique model parameters for EWMA and create box plot
@@ -525,9 +525,9 @@ class GridDataEvaluate:
                 plt.xlabel('Gap Size', fontsize=14)
                 if save:
                     # Define the filename based on the specific graph parameters.
-                    filename = f"arl0_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    filename = f"arl0_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                     plt.tight_layout()
-                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='pdf')
                 plt.show()
     
     def plot_robust_ARL0_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_Methods:bool=True, each_Method:bool=True, dpi:int=500):
@@ -590,9 +590,9 @@ class GridDataEvaluate:
                     plt.xticks(rotation=30)
                     if save:
                         # Define the filename based on the specific graph parameters.
-                        filename = f"arl0_gap_{gap_size}_za_{za}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        filename = f"arl0_gap_{gap_size}_za_{za}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                         plt.tight_layout()
-                        plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                        plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='pdf')
                     plt.show()
 
         # Create boxplots for each gap size, variance size and z & alpha value
@@ -619,9 +619,9 @@ class GridDataEvaluate:
                         plt.xticks(rotation=30)
                         if save:
                             # Define the filename based on the specific graph parameters.
-                            filename = f"arl0_gap_{gap_size}_var{vari}_za_{za}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                            filename = f"arl0_gap_{gap_size}_var{vari}_za_{za}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                             plt.tight_layout()
-                            plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                            plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='pdf')
                         plt.show()
         
         # Create boxplots for all four models describing their general performances in each data mean gap and variance setting
@@ -648,9 +648,9 @@ class GridDataEvaluate:
                 plt.xlabel('Gap Size', fontsize=14)
                 # Save the plot
                 if save:
-                    filename = f"arl0_{model_name}_model_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    filename = f"arl0_{model_name}_model_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                     plt.tight_layout()
-                    plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
+                    plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='pdf')
                 plt.show()
 
         # Create boxplots for each parameter setting in all four models describing their general performances in each data mean gap and variance setting
@@ -683,9 +683,9 @@ class GridDataEvaluate:
                     plt.xlabel('Gap Size', fontsize=14)
                     # Save the plot
                     if save:
-                        filename = f"arl0_{params}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        filename = f"arl0_{params}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                         plt.tight_layout()
-                        plt.savefig(os.path.join(model_dir, filename), dpi=dpi, format='png')
+                        plt.savefig(os.path.join(model_dir, filename), dpi=dpi, format='pdf')
                     plt.show()
         
 
@@ -759,9 +759,9 @@ class GridDataEvaluate:
                 plt.xticks(rotation=30)
                 if save:
                     # Define the filename based on the specific graph parameters.
-                    filename = f"arl1_gap_{gap_size}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    filename = f"arl1_gap_{gap_size}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                     plt.tight_layout()
-                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='pdf')
                 plt.show()
 
         # Create a boxplot for each gap size and variance size
@@ -786,9 +786,9 @@ class GridDataEvaluate:
                     plt.xticks(rotation=30)
                     if save:
                         # Define the filename based on the specific graph parameters.
-                        filename = f"arl1_gap_{gap_size}_var{vari}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        filename = f"arl1_gap_{gap_size}_var{vari}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                         plt.tight_layout()
-                        plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                        plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='pdf')
                     plt.show()
 
         # Create box plots for CUSUM model
@@ -804,9 +804,9 @@ class GridDataEvaluate:
             plt.ylabel('$ARL_1$', fontsize=14)
             plt.xlabel('Gap Size', fontsize=14)
             if save:
-                filename = f"arl1_all_cusum_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                filename = f"arl1_all_cusum_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                 plt.tight_layout()
-                plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
+                plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='pdf')
             plt.show()
 
         # Create box plots for EWMA model
@@ -822,9 +822,9 @@ class GridDataEvaluate:
             plt.ylabel('$ARL_1$', fontsize=14)
             plt.xlabel('Gap Size', fontsize=14)
             if save:
-                filename = f"arl1_all_ewma_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                filename = f"arl1_all_ewma_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                 plt.tight_layout()
-                plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
+                plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='pdf')
             plt.show()
 
         # Loop through each unique model parameters for CUSUM and create box plot
@@ -847,9 +847,9 @@ class GridDataEvaluate:
                 plt.xlabel('Gap Size', fontsize=14)
                 if save:
                     # Define the filename based on the specific graph parameters.
-                    filename = f"arl1_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    filename = f"arl1_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                     plt.tight_layout()
-                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='pdf')
                 plt.show()
 
         # Loop through each unique model parameters for EWMA and create box plot
@@ -871,9 +871,9 @@ class GridDataEvaluate:
                 plt.ylabel('$ARL_1$', fontsize=14)
                 plt.xlabel('Gap Size', fontsize=14)
                 if save:
-                    filename = f"arl1_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    filename = f"arl1_{param}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                     plt.tight_layout()
-                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                    plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='pdf')
                 plt.show()
 
     def plot_robust_ARL1_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_Methods:bool=True, each_Method:bool=True, dpi:int=500):
@@ -936,9 +936,9 @@ class GridDataEvaluate:
                     plt.xticks(rotation=30)
                     if save:
                         # Define the filename based on the specific graph parameters.
-                        filename = f"arl1_gap_{gap_size}_za_{za}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        filename = f"arl1_gap_{gap_size}_za_{za}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                         plt.tight_layout()
-                        plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                        plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='pdf')
                     plt.show()
 
         # Create boxplots for each gap size, variance size and z & alpha value
@@ -965,9 +965,9 @@ class GridDataEvaluate:
                         plt.xticks(rotation=30)
                         if save:
                             # Define the filename based on the specific graph parameters.
-                            filename = f"arl1_gap_{gap_size}_var{vari}_za_{za}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                            filename = f"arl1_gap_{gap_size}_var{vari}_za_{za}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                             plt.tight_layout()
-                            plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='png')
+                            plt.savefig(os.path.join(graph_dir, filename), dpi=dpi, format='pdf')
                         plt.show()
         
         # Create boxplots for all four models describing their general performances in each data mean gap and variance setting
@@ -994,9 +994,9 @@ class GridDataEvaluate:
                 plt.xlabel('Gap Size', fontsize=14)
                 # Save the plot
                 if save:
-                    filename = f"arl1_{model_name}_model_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                    filename = f"arl1_{model_name}_model_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                     plt.tight_layout()
-                    plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='png')
+                    plt.savefig(os.path.join(base_dir, filename), dpi=dpi, format='pdf')
                 plt.show()
 
         # Create boxplots for each parameter setting in all four models describing their general performances in each data mean gap and variance setting
@@ -1029,9 +1029,9 @@ class GridDataEvaluate:
                     plt.xlabel('Gap Size', fontsize=14)
                     # Save the plot
                     if save:
-                        filename = f"arl1_{params}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png"
+                        filename = f"arl1_{params}_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf"
                         plt.tight_layout()
-                        plt.savefig(os.path.join(model_dir, filename), dpi=dpi, format='png')
+                        plt.savefig(os.path.join(model_dir, filename), dpi=dpi, format='pdf')
                     plt.show()
 
     def plot_best_models(self, save:bool=False, dpi:int=500):
@@ -1196,7 +1196,7 @@ class GridDataEvaluate:
         plt.yticks(fontsize=14) 
         plt.legend(fontsize=14)
         if save:
-            save_path = os.path.join("Plots", f"mean_arl0_best_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png")
+            save_path = os.path.join("Plots", f"mean_arl0_best_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf")
             plt.tight_layout()
             plt.savefig(save_path, dpi=dpi)
         plt.show()
@@ -1249,7 +1249,7 @@ class GridDataEvaluate:
         plt.yticks(fontsize=14) 
         plt.legend(fontsize=14)
         if save:
-            save_path = os.path.join("Plots", f"mean_arl1_best_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.png")
+            save_path = os.path.join("Plots", f"mean_arl1_best_models_outliers_{self.outlier_position if self.outlier_position is not None else 'none'}.pdf")
             plt.tight_layout()
             plt.savefig(save_path, dpi=dpi)
         plt.show()
