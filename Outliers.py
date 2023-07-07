@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 from scipy.stats import norm
 
 class OutlierInjector:
@@ -203,22 +204,29 @@ class OutlierInjector:
         # if save_path is not None:
         #     assert os.path.isdir(os.path.dirname(save_path)), "The directory of save_path does not exist."
         assert isinstance(dpi, int) and dpi > 0, f"The dpi:{dpi} parameter must be a positive integer."
+        # Set style and palette
+        sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
+        sns.color_palette("crest", as_cmap=True)
         plt.figure(figsize=(15, 7.5))
         plt.plot(self.data, color='#0F8291', label='Data with Outliers') # Dark Teal 
         plt.plot(self.original_data, color="#003E74", label='Original Data')  # Imperial Blue
         plt.scatter(self.outlier_indices, self.data[self.outlier_indices], color='#00A0C8', zorder=3, label='Outliers')  # Pool Blue
-        plt.axvspan(0, self.burnin-1, facecolor='#373A36', beta=0.25)  # Cool Grey
-        plt.axvline(x=self.burnin-1, color='#373A36', linestyle=':', label="End of Burn-in")  # Cool Grey
+        plt.axvspan(0, self.burnin-1, facecolor='#373A36', alpha=0.35, label="Burn-in period")  # Cool Grey
+        plt.axvline(x=self.burnin-1, color='#373A36', linestyle=':')  # Cool Grey
         if self.in_control_mean != self.out_control_mean:
+            plt.axvspan(self.burnin, self.n_sam_bef_cp, facecolor='#D4EFFC', alpha=0.5, label="In-control period")  # Light Blue
             plt.axvline(x=self.n_sam_bef_cp, color='#DD2501', linestyle='--', label="Change Point")  # Red
+            plt.axvspan(self.n_sam_bef_cp, len(self.data), facecolor='#66A40A', alpha=0.25, label="Out-of-control period")  # Light Grey
+        else:
+            plt.axvspan(self.burnin, len(self.data), facecolor='#66A40A', alpha=0.25, label="Out-of-control period")  # Light Grey
         plt.title(f'Comparison of Original Data and Data with Outliers in the {self.outlier_position} Period', fontsize=20)
         plt.xlabel('Index', fontsize=14)
         plt.ylabel('Value', fontsize=14)
-        plt.legend(fontsize=14)
+        plt.legend(fontsize=15)
         if save:
-            save_path = os.path.join("Plots", f"Comp_outliers_in_{self.outlier_position}")
+            save_path = os.path.join("Plots", f"Comp_outliers_in_{self.outlier_position}.pdf")
             plt.tight_layout()
-            plt.savefig(save_path, dpi=dpi)
+            plt.savefig(save_path, dpi=dpi,format='pdf')
         plt.show()
 
 
