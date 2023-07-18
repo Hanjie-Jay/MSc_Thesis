@@ -196,9 +196,9 @@ class OutlierInjector:
 
         Parameters:
         save (bool): The save argument control whether we will save the plot
-        save_path (str, optional): The path (and filename) where the figure should be saved, default to be data_with_outliers.png.
-        fig_size (tuple, optional): The figure size for the output plot, default to be (15, 7.5)
         dpi (int, optional): The resolution in dots per inch for saved figures (default to be 500).
+        fig_size (tuple, optional): The figure size for the output plot, default to be (15, 7.5)
+        save_path (str, optional)ß: The path (and filename) where the figure should be saved, default to be data_with_outliers.png.
         """
         assert isinstance(save, bool), f"The save:{save} argument should be either True or False"
         # assert isinstance(save_path, (str, type(None))), "save_path should be a string or None."
