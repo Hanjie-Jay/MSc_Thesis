@@ -10,6 +10,8 @@ import ControlChartFunc
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.stats import norm
+from scipy.stats import trim_mean
+from scipy.stats.mstats import winsorize
 
 # Reload the module and reimport functions from the reloaded module
 importlib.reload(GraphGeneration)
@@ -27,6 +29,101 @@ importlib.reload(ControlChartFunc)
 from ControlChartFunc import RobustMethods, ControlChart
 
 
+
+
+# ------------------Plot for the robust methods to better illustrate the idea-------------------
+
+n_sam_bef_cp = 15
+n_sam_aft_cp = 15
+variance = 4
+burnin = 0
+gap_size = 5
+alpha = 0.001
+valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
+outlier_position = valid_positions[0]
+outlier_ratio = 0.25
+asymmetric_ratio = 0.25
+data_new = np.append(np.random.normal(size=n_sam_bef_cp, scale=np.sqrt(variance)), 
+                       np.random.normal(size=n_sam_aft_cp,loc=gap_size, scale=np.sqrt(variance)))
+outinj_new = OutlierInjector(data_new ,n_sam_bef_cp, n_sam_aft_cp, burnin, variance, 
+                         gap_size, variance, alpha, outlier_position, outlier_ratio, asymmetric_ratio)
+out_data = outinj_new.insert_outliers()
+# outinj_new.plot_data(save=True, dpi=600, fig_size=(10, 6), save_path="data_compare_robust_mean.pdf")
+outlier_ind = outinj_new.outlier_indices
+
+# Sort the data and identify the different parts in the data
+sorted_indices = np.argsort(out_data)
+sorted_data = np.sort(out_data)
+# Create a boolean mask to mark in-control period, out-of-control period and outliers
+in_control_mask = (sorted_indices < n_sam_bef_cp)
+out_of_control_mask = (sorted_indices >= n_sam_bef_cp) & (sorted_indices < (n_sam_bef_cp + n_sam_aft_cp))
+outliers_mask = np.isin(sorted_indices, outlier_ind)
+
+sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
+sns.color_palette("crest", as_cmap=True)
+plt.figure(figsize=(10, 6))
+
+# Define Imperial College color palette
+colors = {'ic-blue': '#003E74', 'ic-poolblue': '#009CBC', 'ic-red': '#DD2501', 'ic-lightblue': '#D4EFFC', 'ic-green':'#02893B',
+          'ic-orange':'#EB7300', 'ic-purple':'#653098', 'ic-brick':'#A51900'}
+
+# Plot in-control period data
+plt.plot(np.where(in_control_mask)[0], sorted_data[in_control_mask], 'D', color=colors['ic-blue'], label='In-control') 
+# Plot out-of-control period data
+plt.plot(np.where(out_of_control_mask)[0], sorted_data[out_of_control_mask], 'D', color=colors['ic-poolblue'], label='Out-of-control') 
+# Plot outliers
+plt.plot(np.where(outliers_mask)[0], sorted_data[outliers_mask], '.', color=colors['ic-orange'], label='Outliers')
+
+# Shade the region for computing the trimmed mean
+trimmed_mean_ratio = 0.2
+lower_index = int(len(sorted_data) * trimmed_mean_ratio)
+upper_index = int(len(sorted_data) * (1 - trimmed_mean_ratio))
+plt.fill_betweenx([sorted_data.min(), sorted_data.max()], lower_index, upper_index, color=colors['ic-lightblue'], alpha=0.5,
+                  label="Trimmed Mean Data")
+
+# Add points for the percentiles for Winsorized mean
+lower_inds = np.arange(lower_index)
+lower_percentile_value = np.full(len(lower_inds), sorted_data[lower_index])
+plt.plot(lower_inds, lower_percentile_value, 'x', color=colors['ic-red'])
+
+upper_inds = np.arange(upper_index,n_sam_bef_cp+n_sam_aft_cp)
+upper_percentile_value = np.full(len(upper_inds), sorted_data[upper_index])
+plt.plot(upper_inds, upper_percentile_value, 'x', color=colors['ic-red'])
+
+# Plot the data used for the Winsorized mean
+winsor_inds = np.arange(lower_index, upper_index+1)
+plt.plot(winsor_inds, sorted_data[winsor_inds], 'x', color=colors['ic-red'], label='Winsorized Mean Data')
+
+# Indicate the median with a vertical line
+median_value = np.median(sorted_data)
+plt.axvline(x=len(sorted_data)//2, color=colors['ic-brick'], linestyle='--', label='Median')
+
+plt.xticks(np.arange(0, len(sorted_data), step=5))  # Change x-axis ticks to show integers
+plt.title('Comparison of Different Data Used in Robust Mean Computation', fontsize=18) 
+plt.xlabel('Sorted Data Index within the Sliding Window ($p^{T}=p^{W}=p^{M}=0.2, n_i=30$)', fontsize=16) 
+plt.ylabel('Data Value', fontsize=16) 
+plt.legend(loc='lower right')
+plt.tight_layout()
+plt.savefig("Plots/compare_robust_mean.pdf", format='pdf', dpi=500)
+plt.show()
+
+
+
+from scipy import signal
+window = signal.windows.tukey(30, alpha=0.4)
+x_values = range(1, len(window) + 1)
+plt.figure(figsize=(10, 6))
+plt.plot(x_values, window, color="#003E74")
+plt.title("Weights ($h_j$) Used in the Calculation of the Cosine Tapered Mean (CT)", fontsize=18)
+plt.ylabel("Weight ($h_j$)", fontsize=16) 
+plt.xlabel("The Index $j$ for Sorted Data within the Sliding Window ($p^{CT}=0.2, n_i=30$)", fontsize=16)
+plt.ylim([0, 1.1])
+plt.tight_layout()
+plt.savefig("Plots/cosine_tapered_mean_weights.pdf", format='pdf', dpi=500)
+plt.show()
+
+
+
 # ------------------Testing function for the grid_robust_params_eval function-------------------
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', 400)
@@ -40,29 +137,32 @@ seeds = [111, 666, 999]
 BURNIN = 100
 cusum_params_list = [(1.50, 1.61), (1.25, 1.99), (1.00, 2.52), (0.75, 3.34), (0.50, 4.77), (0.25, 8.01)]
 ewma_params_list = [(1.00,3.090),(0.75,3.087),(0.50,3.071),(0.40,3.054),(0.30,3.023),(0.25,2.998),(0.20,2.962),(0.10,2.814),(0.05,2.615),(0.03,2.437)]
-# z_list = [1.6449, 1.96, 2.5759]
-# alpha_list = [1, 1.5, 2, 2.5, 3]
-z_list = [1.64, 1.96]
-alpha_list = [1.5, 2, 2.5]
+z_list = [1.6449, 1.96, 2.5759]
+alpha_list = [1, 1.5, 2, 2.5, 3]
+# z_list = [1.64, 1.96]
+# alpha_list = [1.5, 2, 2.5]
 tm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
 wm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
 swm_params_list = [10, 15, 20, 25, 30]
 ctm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
 valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
-outlier_position = valid_positions[2]
-beta = 1e-5
+outlier_position = valid_positions[3]
+beta = 1e-5 
 outlier_ratio = 0.05
 asymmetric_ratio = 0.25
 # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
 grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, 
                             seeds, BURNIN, cusum_params_list, ewma_params_list, z_list, alpha_list,
                              tm_params_list, wm_params_list, swm_params_list, ctm_params_list, 
-                             outlier_position, beta, outlier_ratio, asymmetric_ratio)
+                             None)
 rob_per_table, rob_per_summary = grideval.grid_robust_params_eval()
 
-grideval.plot_robust_ARL0_graphs(True)
-grideval.plot_robust_ARL1_graphs(True)
+grideval.plot_robust_ARL0_graphs(True, dpi=300)
+grideval.plot_C_E_ARL0_graphs(True)
+grideval.plot_robust_ARL1_graphs(True, dpi=300)
+grideval.plot_C_E_ARL1_graphs(True)
 grideval.plot_best_models(True)
+
 tm_table = rob_per_table[rob_per_table['Model (Parameters)'].str.contains('TM')]
 tm_params = tm_table['Model (Parameters)'].unique()
 
@@ -291,7 +391,7 @@ burnin = 100
 gap_size = 5
 alpha = 0.001
 valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
-outlier_position = valid_positions[3]
+outlier_position = valid_positions[0]
 outlier_ratio = 0.05
 asymmetric_ratio = 0.25
 data_1 = np.append(np.random.normal(size=n_sam_bef_cp, scale=np.sqrt(variance)), 
