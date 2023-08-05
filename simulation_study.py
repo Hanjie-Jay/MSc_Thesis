@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 from scipy.stats import trim_mean
 from scipy.stats.mstats import winsorize
+from scipy.signal import tukey
 
 # Reload the module and reimport functions from the reloaded module
 importlib.reload(GraphGeneration)
@@ -31,6 +32,85 @@ from ControlChartFunc import RobustMethods, ControlChart
 
 
 
+
+# ------------------For the table content display in the thesis-------------------
+
+def compute_stats(dataframe):
+    # Get unique gap sizes
+    gap_sizes = dataframe['Gap Size'].unique()
+    # Create a list to hold dataframes for each gap size
+    dfs = []
+    for gap in gap_sizes:
+        # Filter df for the current gap size
+        df_gap = dataframe[dataframe['Gap Size'] == gap]
+        if gap == 0:
+            # Compute mean and std for ARL0 only if gap size is 0
+            df = df_gap.groupby("Model (Parameters)").agg({'ARL0':['mean','std']})
+        else:
+            # Compute mean and std for both ARL0 and ARL1 for gap sizes not equal to 0
+            df = df_gap.groupby("Model (Parameters)").agg({'ARL0':['mean','std'], 'ARL1':['mean','std']})
+        # Add a level to columns MultiIndex to include gap size
+        df.columns = pd.MultiIndex.from_tuples([(gap, *col) for col in df.columns])
+        dfs.append(df)
+    # Concatenate all dataframes in the list along the columns axis
+    final_df = pd.concat(dfs, axis=1)
+    # Sort MultiIndex columns
+    final_df.sort_index(axis=1, level=[0, 1, 2], inplace=True)
+    final_df = final_df.round(1)
+    return final_df
+
+# Setup initial values
+n_sam_bef_cp = 500
+n_sam_aft_cp = 400
+gap_sizes = [1, 5, 10]
+variances = [1, 4, 9]
+# seeds = [111, 222, 333, 666, 999]
+seeds = [111, 666, 999]
+BURNIN = 100
+cusum_params_list = [(1.50, 1.61), (1.25, 1.99), (1.00, 2.52), (0.75, 3.34), (0.50, 4.77), (0.25, 8.01)]
+ewma_params_list = [(1.00,3.090),(0.75,3.087),(0.50,3.071),(0.40,3.054),(0.30,3.023),(0.25,2.998),(0.20,2.962),(0.10,2.814),(0.05,2.615),(0.03,2.437)]
+z_list = [1.6449, 1.96, 2.5759]
+alpha_list = [1, 1.5, 2, 2.5, 3]
+# z_list = [1.64, 1.96]
+# alpha_list = [1.5, 2, 2.5]
+tm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
+wm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
+swm_params_list = [10, 15, 20, 25, 30]
+ctm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
+valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
+outlier_position = valid_positions[1]
+beta = 1e-5 
+outlier_ratio = 0.05
+asymmetric_ratio = 0.25
+# simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
+grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, 
+                            seeds, BURNIN, cusum_params_list, ewma_params_list, z_list, alpha_list,
+                             tm_params_list, wm_params_list, swm_params_list, ctm_params_list, 
+                             None)
+grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, 
+                            seeds, BURNIN, cusum_params_list, ewma_params_list, z_list, alpha_list,
+                             tm_params_list, wm_params_list, swm_params_list, ctm_params_list, 
+                             outlier_position, beta, outlier_ratio, asymmetric_ratio)
+# rob_per_table, rob_per_summary = grideval.grid_robust_params_eval()
+class_per_table, class_per_summary = grideval.grid_C_E_params_eval()
+grideval.plot_C_E_ARL0_graphs(save=True,each_G_V=False, all_CUSUM=False, all_EWMA=False,each_CUSUM=False,each_EWMA=False)
+
+# Generate table for thesis
+class_per_table_var_1 = class_per_table[class_per_table["Data Var"] == variances[0]]
+class_per_table_var_4 = class_per_table[class_per_table["Data Var"] == variances[1]]
+class_per_table_var_9 = class_per_table[class_per_table["Data Var"] == variances[2]]
+
+
+df_var_1_table = compute_stats(class_per_table_var_1)
+df_var_4_table = compute_stats(class_per_table_var_4)
+df_var_9_table = compute_stats(class_per_table_var_9)
+
+print(df_var_1_table.to_latex())
+print(df_var_4_table.to_latex())
+print(df_var_9_table.to_latex())
+
+
+
 # ------------------Plot for the robust methods to better illustrate the idea-------------------
 
 n_sam_bef_cp = 15
@@ -40,9 +120,9 @@ burnin = 0
 gap_size = 5
 alpha = 0.001
 valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
-outlier_position = valid_positions[0]
-outlier_ratio = 0.25
-asymmetric_ratio = 0.25
+outlier_position = valid_positions[2]
+outlier_ratio = 0.2
+asymmetric_ratio = 0.4
 data_new = np.append(np.random.normal(size=n_sam_bef_cp, scale=np.sqrt(variance)), 
                        np.random.normal(size=n_sam_aft_cp,loc=gap_size, scale=np.sqrt(variance)))
 outinj_new = OutlierInjector(data_new ,n_sam_bef_cp, n_sam_aft_cp, burnin, variance, 
@@ -61,24 +141,24 @@ outliers_mask = np.isin(sorted_indices, outlier_ind)
 
 sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
 sns.color_palette("crest", as_cmap=True)
-plt.figure(figsize=(10, 6))
+plt.figure(figsize=(14, 8))
 
 # Define Imperial College color palette
-colors = {'ic-blue': '#003E74', 'ic-poolblue': '#009CBC', 'ic-red': '#DD2501', 'ic-lightblue': '#D4EFFC', 'ic-green':'#02893B',
-          'ic-orange':'#EB7300', 'ic-purple':'#653098', 'ic-brick':'#A51900'}
+colors = {'ic-blue': '#003E74', 'ic-poolblue': '#009CBC', 'ic-red': '#DD2501', 'ic-grey': '#9D9D9D', 
+          'ic-green':'#02893B', 'ic-orange':'#EB7300', 'ic-purple':'#653098', 'ic-brick':'#A51900'}
 
 # Plot in-control period data
-plt.plot(np.where(in_control_mask)[0], sorted_data[in_control_mask], 'D', color=colors['ic-blue'], label='In-control') 
+plt.plot(np.where(in_control_mask)[0], sorted_data[in_control_mask], 's', color=colors['ic-blue'], label='In-control Period Data') 
 # Plot out-of-control period data
-plt.plot(np.where(out_of_control_mask)[0], sorted_data[out_of_control_mask], 'D', color=colors['ic-poolblue'], label='Out-of-control') 
+plt.plot(np.where(out_of_control_mask)[0], sorted_data[out_of_control_mask], 'D', color=colors['ic-poolblue'], label='Out-of-Control Period Data') 
 # Plot outliers
-plt.plot(np.where(outliers_mask)[0], sorted_data[outliers_mask], '.', color=colors['ic-orange'], label='Outliers')
+plt.plot(np.where(outliers_mask)[0], sorted_data[outliers_mask], 'v', color=colors['ic-orange'], label='Outliers')
 
 # Shade the region for computing the trimmed mean
 trimmed_mean_ratio = 0.2
 lower_index = int(len(sorted_data) * trimmed_mean_ratio)
 upper_index = int(len(sorted_data) * (1 - trimmed_mean_ratio))
-plt.fill_betweenx([sorted_data.min(), sorted_data.max()], lower_index, upper_index, color=colors['ic-lightblue'], alpha=0.5,
+plt.fill_betweenx([sorted_data.min(), sorted_data.max()], lower_index, upper_index, color=colors['ic-grey'], alpha=0.5,
                   label="Trimmed Mean Data")
 
 # Add points for the percentiles for Winsorized mean
@@ -90,19 +170,19 @@ upper_inds = np.arange(upper_index,n_sam_bef_cp+n_sam_aft_cp)
 upper_percentile_value = np.full(len(upper_inds), sorted_data[upper_index])
 plt.plot(upper_inds, upper_percentile_value, 'x', color=colors['ic-red'])
 
-# Plot the data used for the Winsorized mean
+# Plot the data used for the Winsorized mean and Cosine Tapered Mean
 winsor_inds = np.arange(lower_index, upper_index+1)
-plt.plot(winsor_inds, sorted_data[winsor_inds], 'x', color=colors['ic-red'], label='Winsorized Mean Data')
+plt.plot(winsor_inds, sorted_data[winsor_inds], 'x', color=colors['ic-red'], label='Winsorised Mean Data')
+plt.plot(np.arange(len(sorted_data)), sorted_data*tukey(len(sorted_data), 2*trimmed_mean_ratio), '+', color=colors['ic-green'], label='Cosine Tapered Mean Data') 
 
 # Indicate the median with a vertical line
 median_value = np.median(sorted_data)
 plt.axvline(x=len(sorted_data)//2, color=colors['ic-brick'], linestyle='--', label='Median')
-
 plt.xticks(np.arange(0, len(sorted_data), step=5))  # Change x-axis ticks to show integers
-plt.title('Comparison of Different Data Used in Robust Mean Computation', fontsize=18) 
-plt.xlabel('Sorted Data Index within the Sliding Window ($p^{T}=p^{W}=p^{M}=0.2, n_i=30$)', fontsize=16) 
+plt.title('Comparison of Different Sorted Data Used in Robust Mean Computation', fontsize=18) 
+plt.xlabel('Sorted Data Index within the Sliding Window ($p^{T}=p^{W}=p^{CT}=0.2, n_i=30$)', fontsize=16) 
 plt.ylabel('Data Value', fontsize=16) 
-plt.legend(loc='lower right')
+plt.legend(loc='upper left', fontsize=15)
 plt.tight_layout()
 plt.savefig("Plots/compare_robust_mean.pdf", format='pdf', dpi=500)
 plt.show()
@@ -146,7 +226,7 @@ wm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15
 swm_params_list = [10, 15, 20, 25, 30]
 ctm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
 valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
-outlier_position = valid_positions[3]
+outlier_position = valid_positions[0]
 beta = 1e-5 
 outlier_ratio = 0.05
 asymmetric_ratio = 0.25
@@ -156,7 +236,49 @@ grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances,
                              tm_params_list, wm_params_list, swm_params_list, ctm_params_list, 
                              None)
 rob_per_table, rob_per_summary = grideval.grid_robust_params_eval()
+class_per_table, class_per_summary = grideval.grid_C_E_params_eval()
 
+# -------------------- For the table in thesis -----------------------
+# Generate table for thesis
+class_per_table_var_1 = class_per_table[class_per_table["Data Var"] == variances[0]]
+class_per_table_var_4 = class_per_table[class_per_table["Data Var"] == variances[1]]
+class_per_table_var_9 = class_per_table[class_per_table["Data Var"] == variances[2]]
+
+def compute_stats(dataframe):
+    # Get unique gap sizes
+    gap_sizes = dataframe['Gap Size'].unique()
+    # Create a list to hold dataframes for each gap size
+    dfs = []
+    for gap in gap_sizes:
+        # Filter df for the current gap size
+        df_gap = dataframe[dataframe['Gap Size'] == gap]
+        if gap == 0:
+            # Compute mean and std for ARL0 only if gap size is 0
+            df = df_gap.groupby("Model (Parameters)").agg({'ARL0':['mean','std']})
+        else:
+            # Compute mean and std for both ARL0 and ARL1 for gap sizes not equal to 0
+            df = df_gap.groupby("Model (Parameters)").agg({'ARL0':['mean','std'], 'ARL1':['mean','std']})
+        # Add a level to columns MultiIndex to include gap size
+        df.columns = pd.MultiIndex.from_tuples([(gap, *col) for col in df.columns])
+        dfs.append(df)
+    # Concatenate all dataframes in the list along the columns axis
+    final_df = pd.concat(dfs, axis=1)
+    # Sort MultiIndex columns
+    final_df.sort_index(axis=1, level=[0, 1, 2], inplace=True)
+    final_df = final_df.round(1)
+    return final_df
+
+df_var_1_table = compute_stats(class_per_table_var_1)
+df_var_4_table = compute_stats(class_per_table_var_4)
+df_var_9_table = compute_stats(class_per_table_var_9)
+
+print(df_var_1_table.to_latex())
+print(df_var_4_table.to_latex())
+print(df_var_9_table.to_latex())
+
+
+
+# plot graphs
 grideval.plot_robust_ARL0_graphs(True, dpi=300)
 grideval.plot_C_E_ARL0_graphs(True)
 grideval.plot_robust_ARL1_graphs(True, dpi=300)

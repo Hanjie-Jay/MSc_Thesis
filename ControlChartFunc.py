@@ -869,12 +869,12 @@ class RobustMethods:
         assert isinstance(window_length, int) and window_length <= self.n, f"Window length={window_length} must be an integer less than or equal to the number of observations={self.n}"
         if self._current_ind == 1:
             # Initialised the weights
-            self.ctm_weights = tukey(window_length, ratio) 
+            self.ctm_weights = tukey(window_length, ratio*2) 
         # Apply the weight to the sorted data, if-else is for the case when we don't have burnin
         if self._current_ind > window_length:
             cosine_tapered_data = self.ctm_weights * self._sorted_data_cosine
         else:
-            ctm_weight = tukey(len(self._sorted_data_cosine), ratio) 
+            ctm_weight = tukey(len(self._sorted_data_cosine), ratio*2) 
             cosine_tapered_data = ctm_weight * self._sorted_data_cosine
         # Compute the mean
         cosine_tapered_mean = np.mean(cosine_tapered_data)

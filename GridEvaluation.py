@@ -142,7 +142,7 @@ class GridDataEvaluate:
         # Check user-provided input for outlier position
         simulate_data_list = []
         np.random.seed(seed)
-        # Without change in mean but different variance
+        # Without change in mean
         for variance in self.variances:
             data_without_outliers = np.random.normal(scale=np.sqrt(variance),size=self.n_sam_bef_cp + self.n_sam_aft_cp)
             outinj = OutlierInjector(data_without_outliers, self.n_sam_bef_cp, self.n_sam_aft_cp, self.burnin, variance, 0, variance, 
