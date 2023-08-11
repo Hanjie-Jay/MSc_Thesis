@@ -1,3 +1,4 @@
+import re
 import os
 import numpy as np
 import pandas as pd
@@ -279,15 +280,15 @@ class GridDataEvaluate:
                             swm_params = swm_params_list[i]
                             ctm_params = ctm_params_list[i]
                             method_params = {
-                                'TM': tm_params,
-                                'WM': wm_params,
-                                'SWM': swm_params,
-                                'CTM': ctm_params
+                                'T': tm_params,
+                                'W': wm_params,
+                                'M': swm_params,
+                                'CT': ctm_params
                             }
                             results = arl_robust_mean(
                                 data, self.burnin, swm_params, 
-                                tm_params[0] if swm_params is not None else None, wm_params[0] if wm_params is not None else None, 
-                                ctm_params[0] if ctm_params is not None else None, tm_params[1] if swm_params is not None else None, 
+                                tm_params[0] if tm_params is not None else None, wm_params[0] if wm_params is not None else None, 
+                                ctm_params[0] if ctm_params is not None else None, tm_params[1] if tm_params is not None else None, 
                                 wm_params[1] if wm_params is not None else None, ctm_params[1] if ctm_params is not None else None, 
                                 z, alpha, true_cp)
                             for method, method_arl in results.items():
@@ -305,10 +306,10 @@ class GridDataEvaluate:
                             swm_params = swm_params_list[i]
                             ctm_params = ctm_params_list[i]
                             method_params = {
-                                'TM': tm_params,
-                                'WM': wm_params,
-                                'SWM': swm_params,
-                                'CTM': ctm_params
+                                'T': tm_params,
+                                'W': wm_params,
+                                'M': swm_params,
+                                'CT': ctm_params
                             }
                             results = arl_robust_mean(
                                 data, self.burnin, swm_params, 
@@ -340,6 +341,22 @@ class GridDataEvaluate:
         performance_table['Data Var'] = pd.to_numeric(performance_table['Data Var'])
         # Take absolute value of gap size
         performance_table['Gap Size'] = performance_table['Gap Size'].abs()
+        # Transform the model index in proper form
+        def transform_robust_index(index):
+            model = str(index).split(' ')[0]
+            if model != 'M':
+                z = re.search(r'z:(\d+\.\d+)',index).group(1)
+                alpha = re.search(r'a:(\d+(?:\.\d+)?)', index).group(1)
+                p = re.search(r'\((\d+\.+\d+), ', index).group(1)
+                lsw = re.search(r', (\d+)\)', index).group(1)
+                model_name = f"{model} ({z}, {alpha}, {p}, {lsw})"
+            else:
+                z = re.search(r'z:(\d+\.\d+)',index).group(1)
+                alpha = re.search(r'a:(\d+(?:\.\d+)?)', index).group(1)
+                lsw = re.search(r',(\d+)\)', index).group(1)
+                model_name = f"{model} ({z}, {alpha}, {lsw})"
+            return model_name
+        performance_table['Model (Parameters)'] = performance_table['Model (Parameters)'].apply(transform_robust_index)
         self.robust_performance_table = performance_table
         self.robust_performance_summary = performance_summary
         return performance_table, performance_summary.round(4) # 4 decimal places
@@ -363,7 +380,7 @@ class GridDataEvaluate:
         """
         if not hasattr(self, 'C_E_performance_table'):
             self.grid_C_E_params_eval()
-        per_table = self.C_E_performance_table
+        per_table = self.C_E_performance_table.copy()
         # Assertions to validate input data types
         assert isinstance(save, bool), f"The save:{save} parameter must be a boolean."
         assert isinstance(per_table, pd.DataFrame), "per_table must be a pandas DataFrame."
@@ -533,7 +550,7 @@ class GridDataEvaluate:
     def plot_robust_ARL0_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_Methods:bool=True, each_Method:bool=True, dpi:int=500):
         if not hasattr(self, 'robust_performance_table'):
             self.grid_robust_params_eval()
-        per_table = self.robust_performance_table
+        per_table = self.robust_performance_table.copy()
         # Assertions to validate input data types
         assert isinstance(save, bool), f"The save:{save} parameter must be a boolean."
         assert isinstance(per_table, pd.DataFrame), "per_table must be a pandas DataFrame."
@@ -545,21 +562,17 @@ class GridDataEvaluate:
         
         # Separate unique methods rows
         per_table[['Model', 'Parameters']] = per_table['Model (Parameters)'].str.split(" ", n = 1, expand = True)
+
         # Get the tables for each method
-        tm_table = per_table[per_table['Model'] == 'TM'] # Select rows that have TM
-        wm_table = per_table[per_table['Model'] == 'WM'] # Select rows that have WM
-        swm_table = per_table[per_table['Model'] == 'SWM'] # Select rows that have SWM
-        ctm_table = per_table[per_table['Model'] == 'CTM'] # Select rows that have CTM
-        # unique model parameters for all methods
-        tm_params = tm_table['Model (Parameters)'].unique()
-        wm_params = wm_table['Model (Parameters)'].unique()
-        swm_params = swm_table['Model (Parameters)'].unique()
-        ctm_params = ctm_table['Model (Parameters)'].unique()
-        
+        tm_table = per_table[per_table['Model'] == 'T'] # Select rows that have T
+        wm_table = per_table[per_table['Model'] == 'W'] # Select rows that have W
+        swm_table = per_table[per_table['Model'] == 'M'] # Select rows that have SW
+        ctm_table = per_table[per_table['Model'] == 'CT'] # Select rows that have CT
+
         # Set style and palette
         sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
         sns.color_palette("crest", as_cmap=True)
-        n_colors = len(tm_params) + len(wm_params) + len(swm_params) + len(ctm_params) # the total number of unique parameters
+        n_colors = len(self.tm_params_list) + len(self.wm_params_list) + len(self.swm_params_list) + len(self.ctm_params_list) # the total number of unique parameters
         colors = sns.color_palette("crest", n_colors=n_colors)
         colors_each = sns.color_palette("crest", n_colors=len(self.variances))
 
@@ -578,8 +591,10 @@ class GridDataEvaluate:
                 subset_za = per_table[per_table['z and alpha'] == za]
                 for gap_size in subset_za['Gap Size'].unique():
                     subset_df = subset_za[subset_za['Gap Size'] == gap_size]
+                    unique_models = subset_df['Model (Parameters)'].unique()
+                    color_mapping = {model: color for model, color in zip(unique_models, colors)}
                     plt.figure(figsize=(20, 8))
-                    ax =sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df, palette=colors)
+                    ax = sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df, palette=color_mapping)
                     ax.tick_params(labelsize=10)
                     if self.outlier_position is None:
                         plt.title(f'Boxplot of $ARL_0$ for Various Models on Streaming Data with z and alpha: {za}, Mean Gap Size of {gap_size} (No Outliers)', fontsize=18)
@@ -607,8 +622,10 @@ class GridDataEvaluate:
                 for gap_size in subset_za['Gap Size'].unique():
                     for vari in subset_za['Data Var'].unique():
                         subset_df = subset_za[(subset_za['Gap Size'] == gap_size) & (subset_za['Data Var'] == vari)]
+                        unique_models = subset_df['Model (Parameters)'].unique()
+                        color_mapping = {model: color for model, color in zip(unique_models, colors)}
                         plt.figure(figsize=(20, 8))
-                        ax =sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df, palette=colors)
+                        ax =sns.boxplot(x='Model (Parameters)', y='ARL0', data=subset_df, palette=color_mapping)
                         ax.tick_params(labelsize=10)
                         if self.outlier_position is None:
                             plt.title(f'Boxplot of $ARL_0$ for Various Models on Streaming Data with z and alpha: {za}, Mean Gap Size of {gap_size} and Data Variance of {vari} (No Outliers)', fontsize=18)
@@ -627,10 +644,10 @@ class GridDataEvaluate:
         # Create boxplots for all four models describing their general performances in each data mean gap and variance setting
         if all_Methods == True:
             models = {
-                'TM': tm_table,
-                'WM': wm_table,
-                'SWM': swm_table,
-                'CTM': ctm_table
+                'T': tm_table,
+                'W': wm_table,
+                'M': swm_table,
+                'CT': ctm_table
             }
             # Iterate over each model
             for model_name, model_table in models.items():
@@ -656,10 +673,10 @@ class GridDataEvaluate:
         # Create boxplots for each parameter setting in all four models describing their general performances in each data mean gap and variance setting
         if each_Method == True:
             models = {
-                'TM': tm_table,
-                'WM': wm_table,
-                'SWM': swm_table,
-                'CTM': ctm_table
+                'T': tm_table,
+                'W': wm_table,
+                'M': swm_table,
+                'CT': ctm_table
             }
             for model_name, model_table in models.items():
                 # Extract unique parameters for the current model
@@ -708,7 +725,7 @@ class GridDataEvaluate:
         """
         if not hasattr(self, 'C_E_performance_table'):
                 self.grid_C_E_params_eval()
-        per_table = self.C_E_performance_table
+        per_table = self.C_E_performance_table.copy()
         # Assertions to validate input data types
         assert isinstance(save, bool), "The save parameter must be a boolean."
         assert isinstance(per_table, pd.DataFrame), "per_table must be a pandas DataFrame."
@@ -879,7 +896,7 @@ class GridDataEvaluate:
     def plot_robust_ARL1_graphs(self, save:bool=True, each_G:bool=True, each_G_V:bool=True, all_Methods:bool=True, each_Method:bool=True, dpi:int=500):
         if not hasattr(self, 'robust_performance_table'):
             self.grid_robust_params_eval()
-        per_table = self.robust_performance_table
+        per_table = self.robust_performance_table.copy()
         # Assertions to validate input data types
         assert isinstance(save, bool), f"The save:{save} parameter must be a boolean."
         assert isinstance(per_table, pd.DataFrame), "per_table must be a pandas DataFrame."
@@ -892,20 +909,17 @@ class GridDataEvaluate:
         per_table = per_table[per_table['Gap Size'] != 0]
         # Separate unique methods rows
         per_table[['Model', 'Parameters']] = per_table['Model (Parameters)'].str.split(" ", n = 1, expand = True)
+
         # Get the tables for each method
-        tm_table = per_table[per_table['Model'] == 'TM'] # Select rows that have TM
-        wm_table = per_table[per_table['Model'] == 'WM'] # Select rows that have WM
-        swm_table = per_table[per_table['Model'] == 'SWM'] # Select rows that have SWM
-        ctm_table = per_table[per_table['Model'] == 'CTM'] # Select rows that have CTM
-        # unique model parameters for all methods
-        tm_params = tm_table['Model (Parameters)'].unique()
-        wm_params = wm_table['Model (Parameters)'].unique()
-        swm_params = swm_table['Model (Parameters)'].unique()
-        ctm_params = ctm_table['Model (Parameters)'].unique()
+        tm_table = per_table[per_table['Model'] == 'T'] # Select rows that have T
+        wm_table = per_table[per_table['Model'] == 'W'] # Select rows that have W
+        swm_table = per_table[per_table['Model'] == 'M'] # Select rows that have M
+        ctm_table = per_table[per_table['Model'] == 'CT'] # Select rows that have CT
+
         # Set style and palette
         sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
         sns.color_palette("crest", as_cmap=True)
-        n_colors = len(tm_params) + len(wm_params) + len(swm_params) + len(ctm_params) # the total number of unique parameters
+        n_colors = len(self.tm_params_list) + len(self.wm_params_list) + len(self.swm_params_list) + len(self.ctm_params_list) # the total number of unique parameters
         colors = sns.color_palette("crest", n_colors=n_colors)
         colors_each = sns.color_palette("crest", n_colors=len(self.variances))
 
@@ -924,8 +938,10 @@ class GridDataEvaluate:
                 subset_za = per_table[per_table['z and alpha'] == za]
                 for gap_size in subset_za['Gap Size'].unique():
                     subset_df = subset_za[subset_za['Gap Size'] == gap_size]
+                    unique_models = subset_df['Model (Parameters)'].unique()
+                    color_mapping = {model: color for model, color in zip(unique_models, colors)}
                     plt.figure(figsize=(20, 8))
-                    ax =sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df, palette=colors)
+                    ax =sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df, palette=color_mapping)
                     ax.tick_params(labelsize=10)
                     if self.outlier_position is None:
                         plt.title(f'Boxplot of $ARL_1$ for Various Models on Streaming Data with z and alpha: {za}, Mean Gap Size of {gap_size} (No Outliers)', fontsize=18)
@@ -953,8 +969,10 @@ class GridDataEvaluate:
                 for gap_size in subset_za['Gap Size'].unique():
                     for vari in subset_za['Data Var'].unique():
                         subset_df = subset_za[(subset_za['Gap Size'] == gap_size) & (subset_za['Data Var'] == vari)]
+                        unique_models = subset_df['Model (Parameters)'].unique()
+                        color_mapping = {model: color for model, color in zip(unique_models, colors)}
                         plt.figure(figsize=(20, 8))
-                        ax =sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df, palette=colors)
+                        ax =sns.boxplot(x='Model (Parameters)', y='ARL1', data=subset_df, palette=color_mapping)
                         ax.tick_params(labelsize=10)
                         if self.outlier_position is None:
                             plt.title(f'Boxplot of $ARL_1$ for Various Models on Streaming Data with z and alpha: {za}, Mean Gap Size of {gap_size} and Data Variance of {vari} (No Outliers)', fontsize=18)
@@ -973,10 +991,10 @@ class GridDataEvaluate:
         # Create boxplots for all four models describing their general performances in each data mean gap and variance setting
         if all_Methods == True:
             models = {
-                'TM': tm_table,
-                'WM': wm_table,
-                'SWM': swm_table,
-                'CTM': ctm_table
+                'T': tm_table,
+                'W': wm_table,
+                'M': swm_table,
+                'CT': ctm_table
             }
             # Iterate over each model
             for model_name, model_table in models.items():
@@ -1002,10 +1020,10 @@ class GridDataEvaluate:
         # Create boxplots for each parameter setting in all four models describing their general performances in each data mean gap and variance setting
         if each_Method == True:
             models = {
-                'TM': tm_table,
-                'WM': wm_table,
-                'SWM': swm_table,
-                'CTM': ctm_table
+                'T': tm_table,
+                'W': wm_table,
+                'M': swm_table,
+                'CT': ctm_table
             }
             for model_name, model_table in models.items():
                 # Extract unique parameters for the current model
@@ -1102,10 +1120,10 @@ class GridDataEvaluate:
             gap_data = robust_per_table[robust_per_table['Gap Size'] == gap]
             gap_data[['Model', 'Parameters']] = gap_data['Model (Parameters)'].str.split(" ", n = 1, expand = True)
             # Separate tables for TM, WM, SWM, and CTM
-            tm_data = gap_data[gap_data['Model'] == 'TM'] 
-            wm_data = gap_data[gap_data['Model'] == 'WM'] 
-            swm_data = gap_data[gap_data['Model'] == 'SWM'] 
-            ctm_data = gap_data[gap_data['Model'] == 'CTM']
+            tm_data = gap_data[gap_data['Model'] == 'T'] 
+            wm_data = gap_data[gap_data['Model'] == 'W'] 
+            swm_data = gap_data[gap_data['Model'] == 'M'] 
+            ctm_data = gap_data[gap_data['Model'] == 'CT']
             # Sort by mean and standard deviation
             tm_data = tm_data.sort_values(by=[('ARL0', 'mean'), ('ARL0', 'std')], ascending=[False, True])
             wm_data = wm_data.sort_values(by=[('ARL0', 'mean'), ('ARL0', 'std')], ascending=[False, True])
@@ -1163,25 +1181,25 @@ class GridDataEvaluate:
             plt.annotate(txt, (x_arl0[i], best_arl0_ewmas[('ARL0', 'mean')].iloc[i]) + offsets_ewma, 
                         fontsize=12, color=color_ewma)
         # TM ARL0
-        plt.plot(x_arl0, best_arl0_tms[('ARL0', 'mean')], 'o-', color=color_tm, label='TM')
+        plt.plot(x_arl0, best_arl0_tms[('ARL0', 'mean')], 'o-', color=color_tm, label='T')
         # Annotate with model parameters
         for i, txt in enumerate(best_arl0_tms.loc[:, 'Model (Parameters)']):
             plt.annotate(txt, (x_arl0[i], best_arl0_tms.loc[:, ('ARL0', 'mean')].iloc[i]) + offsets_tm, 
                         fontsize=12, color=color_tm) 
         # WM ARL0
-        plt.plot(x_arl0, best_arl0_wms[('ARL0', 'mean')], 'x-', color=color_wm, label='WM')
+        plt.plot(x_arl0, best_arl0_wms[('ARL0', 'mean')], 'x-', color=color_wm, label='W')
         # Annotate with model parameters
         for i, txt in enumerate(best_arl0_wms.loc[:, 'Model (Parameters)']):
             plt.annotate(txt, (x_arl0[i], best_arl0_wms.loc[:, ('ARL0', 'mean')].iloc[i]) + offsets_wm, 
                         fontsize=12, color=color_wm)   
         # SWM ARL0
-        plt.plot(x_arl0, best_arl0_swms[('ARL0', 'mean')], 'o-', color=color_swm, label='SWM')
+        plt.plot(x_arl0, best_arl0_swms[('ARL0', 'mean')], 'o-', color=color_swm, label='M')
         # Annotate with model parameters
         for i, txt in enumerate(best_arl0_swms.loc[:, 'Model (Parameters)']):
             plt.annotate(txt, (x_arl0[i], best_arl0_swms.loc[:, ('ARL0', 'mean')].iloc[i]) + offsets_swm, 
                         fontsize=12, color=color_swm)
         # CTM ARL0
-        plt.plot(x_arl0, best_arl0_ctms[('ARL0', 'mean')], 'x-', color=color_ctm, label='CTM')
+        plt.plot(x_arl0, best_arl0_ctms[('ARL0', 'mean')], 'x-', color=color_ctm, label='CT')
         # Annotate with model parameters
         for i, txt in enumerate(best_arl0_ctms.loc[:, 'Model (Parameters)']):
             plt.annotate(txt, (x_arl0[i], best_arl0_ctms.loc[:, ('ARL0', 'mean')].iloc[i]) + offsets_ctm, 
@@ -1216,25 +1234,25 @@ class GridDataEvaluate:
             plt.annotate(txt, (x_arl1[i], best_arl1_ewmas[('ARL1', 'mean')].iloc[i]) + offsets_ewma, 
                         fontsize=12, color=color_ewma)
         # TM ARL1
-        plt.plot(x_arl1, best_arl1_tms[('ARL1', 'mean')], 'o-', color=color_tm, label='TM')
+        plt.plot(x_arl1, best_arl1_tms[('ARL1', 'mean')], 'o-', color=color_tm, label='T')
         # Annotate with model parameters
         for i, txt in enumerate(best_arl1_tms.loc[:, 'Model (Parameters)']):
             plt.annotate(txt, (x_arl1[i], best_arl1_tms.loc[:, ('ARL1', 'mean')].iloc[i]) + offsets_tm, 
                         fontsize=12, color=color_tm)            
         # WM ARL1
-        plt.plot(x_arl1, best_arl1_wms[('ARL1', 'mean')], 'x-', color=color_wm, label='WM')
+        plt.plot(x_arl1, best_arl1_wms[('ARL1', 'mean')], 'x-', color=color_wm, label='W')
         # Annotate with model parameters
         for i, txt in enumerate(best_arl1_wms.loc[:, 'Model (Parameters)']):
             plt.annotate(txt, (x_arl1[i], best_arl1_wms.loc[:, ('ARL1', 'mean')].iloc[i]) + offsets_wm, 
                         fontsize=12, color=color_wm)    
         # SWM ARL1
-        plt.plot(x_arl1, best_arl1_swms[('ARL1', 'mean')], 'o-', color=color_swm, label='SWM')
+        plt.plot(x_arl1, best_arl1_swms[('ARL1', 'mean')], 'o-', color=color_swm, label='M')
         # Annotate with model parameters
         for i, txt in enumerate(best_arl1_swms.loc[:, 'Model (Parameters)']):
             plt.annotate(txt, (x_arl1[i], best_arl1_swms.loc[:, ('ARL1', 'mean')].iloc[i]) + offsets_swm, 
                         fontsize=12, color=color_swm)
         # CTM ARL1
-        plt.plot(x_arl1, best_arl1_ctms[('ARL1', 'mean')], 'x-', color=color_ctm, label='CTM')
+        plt.plot(x_arl1, best_arl1_ctms[('ARL1', 'mean')], 'x-', color=color_ctm, label='CT')
         # Annotate with model parameters
         for i, txt in enumerate(best_arl1_ctms.loc[:, 'Model (Parameters)']):
             plt.annotate(txt, (x_arl1[i], best_arl1_ctms.loc[:, ('ARL1', 'mean')].iloc[i]) + offsets_ctm, 

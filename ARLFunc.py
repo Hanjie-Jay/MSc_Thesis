@@ -191,25 +191,25 @@ def arl_robust_mean(data:np.ndarray, burnin:int, median_window_length:int, trimm
     if median_window_length is not None:
         _, _, swm_au, swm_al = data_cc.sliding_window_median_CI_val(z_val, h_val, data_mean_burnin, data_sd_burnin)
         swm_alert_ind = combine_alert_ind(swm_au, swm_al, burnin)
-        results["SWM"] = {"arl0": compute_arl0(swm_alert_ind, true_cp, data_len), 
+        results["M"] = {"arl0": compute_arl0(swm_alert_ind, true_cp, data_len), 
                           "arl1": compute_arl1(swm_alert_ind, true_cp, data_len)}
     # ARL for sliding window trimmed mean confidence interval
     if trimmed_ratio is not None:
         _, _, tm_au, tm_al = data_cc.trimmed_mean_CI_val(z_val, h_val, data_mean_burnin, data_sd_burnin)
         tm_alert_ind = combine_alert_ind(tm_au, tm_al, burnin)
-        results["TM"] = {"arl0": compute_arl0(tm_alert_ind, true_cp, data_len), 
+        results["T"] = {"arl0": compute_arl0(tm_alert_ind, true_cp, data_len), 
                          "arl1": compute_arl1(tm_alert_ind, true_cp, data_len)}
     # ARL for sliding window winsorized mean confidence interval
     if winsorized_ratio is not None:
         _, _, wm_au, wm_al = data_cc.winsorized_mean_CI_val(z_val, h_val, data_mean_burnin, data_sd_burnin)
         wm_alert_ind = combine_alert_ind(wm_au, wm_al, burnin)
-        results["WM"] = {"arl0": compute_arl0(wm_alert_ind, true_cp, data_len), 
+        results["W"] = {"arl0": compute_arl0(wm_alert_ind, true_cp, data_len), 
                          "arl1": compute_arl1(wm_alert_ind, true_cp, data_len)}
     # ARL for sliding window cosine taper mean confidence interval
     if cosine_ratio is not None:
         _, _, ctm_au, ctm_al = data_cc.cosine_tapered_mean_CI_val(z_val, h_val, data_mean_burnin, data_sd_burnin)
         ctm_alert_ind = combine_alert_ind(ctm_au, ctm_al, burnin)
-        results["CTM"] = {"arl0": compute_arl0(ctm_alert_ind, true_cp, data_len), 
+        results["CT"] = {"arl0": compute_arl0(ctm_alert_ind, true_cp, data_len), 
                           "arl1": compute_arl1(ctm_alert_ind, true_cp, data_len)}
 
     return results

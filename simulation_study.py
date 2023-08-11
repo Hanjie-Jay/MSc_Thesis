@@ -1,4 +1,5 @@
 import os
+import re
 import importlib
 import numpy as np
 import pandas as pd
@@ -35,7 +36,7 @@ from ControlChartFunc import RobustMethods, ControlChart
 
 # ------------------For the table content display in the thesis-------------------
 
-def compute_stats(dataframe):
+def compute_stats_CE(dataframe):
     # Get unique gap sizes
     gap_sizes = dataframe['Gap Size'].unique()
     # Create a list to hold dataframes for each gap size
@@ -70,15 +71,15 @@ BURNIN = 100
 cusum_params_list = [(1.50, 1.61), (1.25, 1.99), (1.00, 2.52), (0.75, 3.34), (0.50, 4.77), (0.25, 8.01)]
 ewma_params_list = [(1.00,3.090),(0.75,3.087),(0.50,3.071),(0.40,3.054),(0.30,3.023),(0.25,2.998),(0.20,2.962),(0.10,2.814),(0.05,2.615),(0.03,2.437)]
 z_list = [1.6449, 1.96, 2.5759]
-alpha_list = [1, 1.5, 2, 2.5, 3]
+alpha_list = [0.9, 0.95, 1., 1.5, 2., 2.5]
 # z_list = [1.64, 1.96]
 # alpha_list = [1.5, 2, 2.5]
-tm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
-wm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
+tm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.1, 25), (0.15, 10), (0.15, 15), (0.15, 20), (0.15, 25), (0.2, 10), (0.2, 15), (0.2, 20), (0.2, 25)]
+wm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.1, 25), (0.15, 10), (0.15, 15), (0.15, 20), (0.15, 25), (0.2, 10), (0.2, 15), (0.2, 20), (0.2, 25)]
 swm_params_list = [10, 15, 20, 25, 30]
-ctm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.15, 10), (0.15, 15), (0.15, 20), (0.2, 10), (0.2, 15), (0.2, 20)]
+ctm_params_list = [(0.1, 10), (0.1, 15), (0.1, 20), (0.1, 25), (0.15, 10), (0.15, 15), (0.15, 20), (0.15, 25), (0.2, 10), (0.2, 15), (0.2, 20), (0.2, 25)]
 valid_positions = ['in-control', 'out-of-control', 'both_in_and_out', 'burn-in']
-outlier_position = valid_positions[1]
+outlier_position = valid_positions[0]
 beta = 1e-5 
 outlier_ratio = 0.05
 asymmetric_ratio = 0.25
@@ -87,6 +88,7 @@ grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances,
                             seeds, BURNIN, cusum_params_list, ewma_params_list, z_list, alpha_list,
                              tm_params_list, wm_params_list, swm_params_list, ctm_params_list, 
                              None)
+
 grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, 
                             seeds, BURNIN, cusum_params_list, ewma_params_list, z_list, alpha_list,
                              tm_params_list, wm_params_list, swm_params_list, ctm_params_list, 
@@ -101,14 +103,93 @@ class_per_table_var_4 = class_per_table[class_per_table["Data Var"] == variances
 class_per_table_var_9 = class_per_table[class_per_table["Data Var"] == variances[2]]
 
 
-df_var_1_table = compute_stats(class_per_table_var_1)
-df_var_4_table = compute_stats(class_per_table_var_4)
-df_var_9_table = compute_stats(class_per_table_var_9)
+df_var_1_table = compute_stats_CE(class_per_table_var_1)
+df_var_4_table = compute_stats_CE(class_per_table_var_4)
+df_var_9_table = compute_stats_CE(class_per_table_var_9)
 
 print(df_var_1_table.to_latex())
 print(df_var_4_table.to_latex())
 print(df_var_9_table.to_latex())
 
+#------------------------- For robust method ---------------------------
+robust_per_table, robust_per_summary = grideval.grid_robust_params_eval()
+robust_per_table.to_csv("robust_raw_result_new.csv", index=False)
+robust_per_summary.to_csv("robust_summary_result_new.csv", index=False)
+
+# Extract z and alpha
+robust_per_table['z'] = robust_per_table['z and alpha'].str.extract('z:(\d+\.\d+)')[0].astype(float)
+robust_per_table['alpha'] = robust_per_table['z and alpha'].str.extract('alpha:(\d+(?:\.\d+)?)')[0].astype(float)
+
+# Generate table for thesis of different variance
+robust_per_table_var_1 = robust_per_table[robust_per_table["Data Var"] == variances[0]]
+robust_per_table_var_4 = robust_per_table[robust_per_table["Data Var"] == variances[1]]
+robust_per_table_var_9 = robust_per_table[robust_per_table["Data Var"] == variances[2]]
+
+def compute_stats_robust(dataframe, z, alpha, outlier):
+    # Extract the data with the given z and alpa value
+    dataframe = dataframe[(dataframe['z']==z) & (dataframe['alpha']==float(alpha))]
+    # Get unique gap sizes
+    gap_sizes = dataframe['Gap Size'].unique()
+    # Create a list to hold dataframes for each gap size
+    dfs = []
+    for gap in gap_sizes:
+        # Filter df for the current gap size
+        df_gap = dataframe[dataframe['Gap Size'] == gap]
+        if gap == 0:
+            if outlier:
+                pass
+            else:
+            # Compute mean and std for ARL0 only if gap size is 0
+                df = df_gap.groupby("Model (Parameters)").agg({'ARL0':['mean','std']})
+                # Add a level to columns MultiIndex to include gap size
+                df.columns = pd.MultiIndex.from_tuples([(gap, *col) for col in df.columns])
+                dfs.append(df)
+        else:
+            # Compute mean and std for both ARL0 and ARL1 for gap sizes not equal to 0
+            df = df_gap.groupby("Model (Parameters)").agg({'ARL0':['mean','std'], 'ARL1':['mean','std']})
+            # Add a level to columns MultiIndex to include gap size
+            df.columns = pd.MultiIndex.from_tuples([(gap, *col) for col in df.columns])
+            dfs.append(df)
+    # Concatenate all dataframes in the list along the columns axis
+    final_df = pd.concat(dfs, axis=1)
+    # Sort MultiIndex columns
+    final_df.sort_index(axis=1, level=[0, 1, 2], inplace=True)
+    final_df = final_df.round(1)
+    return final_df
+
+df_rob_z164_a095_var_4_table = compute_stats_robust(robust_per_table_var_4, z_list[0], alpha_list[1], True)
+df_rob_z164_a095_var_1_table = compute_stats_robust(robust_per_table_var_1, z_list[0], alpha_list[1], True)
+df_rob_z164_a095_var_9_table = compute_stats_robust(robust_per_table_var_9, z_list[0], alpha_list[1], True)
+print(df_rob_z164_a095_var_1_table.to_latex())
+print(df_rob_z164_a095_var_4_table.to_latex())
+print(df_rob_z164_a095_var_9_table.to_latex())
+
+df_rob_z164_a095_var_4_table = compute_stats_robust(robust_per_table_var_4, z_list[0], alpha_list[1], False)
+df_rob_z164_a095_var_1_table = compute_stats_robust(robust_per_table_var_1, z_list[0], alpha_list[1], False)
+df_rob_z164_a095_var_9_table = compute_stats_robust(robust_per_table_var_9, z_list[0], alpha_list[1], False)
+print(df_rob_z164_a095_var_1_table.to_latex())
+print(df_rob_z164_a095_var_4_table.to_latex())
+print(df_rob_z164_a095_var_9_table.to_latex())
+
+df_rob_z257_a2_var_4_table = compute_stats_robust(robust_per_table_var_4, z_list[2], alpha_list[4], True)
+df_rob_z257_a2_var_1_table = compute_stats_robust(robust_per_table_var_1, z_list[2], alpha_list[4], True)
+df_rob_z257_a2_var_9_table = compute_stats_robust(robust_per_table_var_9, z_list[2], alpha_list[4], True)
+print(df_rob_z257_a2_var_1_table.to_latex())
+print(df_rob_z257_a2_var_4_table.to_latex())
+print(df_rob_z257_a2_var_9_table.to_latex())
+
+df_rob_z257_a2_var_4_table = compute_stats_robust(robust_per_table_var_4, z_list[2], alpha_list[4], False)
+df_rob_z257_a2_var_1_table = compute_stats_robust(robust_per_table_var_1, z_list[2], alpha_list[4], False)
+df_rob_z257_a2_var_9_table = compute_stats_robust(robust_per_table_var_9, z_list[2], alpha_list[4], False)
+print(df_rob_z257_a2_var_1_table.to_latex())
+print(df_rob_z257_a2_var_4_table.to_latex())
+print(df_rob_z257_a2_var_9_table.to_latex())
+
+grideval.plot_robust_ARL0_graphs(save=True,each_G_V=False, all_Methods=False, each_Method=False)
+grideval.plot_robust_ARL1_graphs(save=True,each_G_V=False, all_Methods=False, each_Method=False)
+
+grideval.plot_robust_ARL0_graphs(save=True)
+grideval.plot_robust_ARL1_graphs(save=True)
 
 
 # ------------------Plot for the robust methods to better illustrate the idea-------------------
