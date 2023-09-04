@@ -89,4 +89,4 @@ This section provides a historical account of different versions of the project,
 
 ## Author and Acknowledgments
 
-This project was conceived and developed by Hanjie Liang as a part of the MATH70088 MSc Statistics Research Project at Imeprial, an important component of the thesis. Profound gratitude is extended to my supervisor, Prof. Niall Adams from Imperial College London, whose whose unparalleled expertise, guidance, unwavering support, and scholarly insights have been invaluable throughout the development of this thesis.
+This project was conceived and developed by Hanjie Liang as a part of the MATH70088 MSc Statistics Research Project at Imperial, an important component of the thesis. Profound gratitude is extended to my supervisor, Prof. Niall Adams from Imperial College London, whose unparalleled expertise, guidance, unwavering support, and scholarly insights have been invaluable throughout the development of this thesis.
