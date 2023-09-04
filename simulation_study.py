@@ -31,12 +31,75 @@ importlib.reload(ControlChartFunc)
 from ControlChartFunc import RobustMethods, ControlChart
 
 
+# -------------------For the graph of changepoint without outliers added----------------
+def plot_data(data, burnin, change, n_sam_bef_cp, save:bool=False, dpi:int=500, fig_size:tuple=(15, 7.5), save_path:str=None):
+        """
+        Plotting function for visualising the original data with changepoint
 
+        Parameters:
+        save (bool): The save argument control whether we will save the plot
+        dpi (int, optional): The resolution in dots per inch for saved figures (default to be 500).
+        fig_size (tuple, optional): The figure size for the output plot, default to be (15, 7.5)
+        save_path (str, optional)ß: The path (and filename) where the figure should be saved, default to be data_with_outliers.png.
+        """
+        assert isinstance(save, bool), f"The save:{save} argument should be either True or False"
+        # assert isinstance(save_path, (str, type(None))), "save_path should be a string or None."
+        # if save_path is not None:
+        #     assert os.path.isdir(os.path.dirname(save_path)), "The directory of save_path does not exist."
+        assert isinstance(dpi, int) and dpi > 0, f"The dpi:{dpi} parameter must be a positive integer."
+        assert isinstance(fig_size, tuple), f"The fig_size:{fig_size} argument should be a tuple"
+        if save_path is not None:
+            assert isinstance(save_path, str), f"The save_path:{save_path} argument should be a string"
+        # Set style and palette
+        sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
+        sns.color_palette("crest", as_cmap=True)
+        plt.figure(figsize=fig_size)
+        plt.plot(data, color="#003E74", label='Data Stream')  # Imperial Blue
+        if burnin > 0:
+            plt.axvspan(0, burnin-1, facecolor='#373A36', alpha=0.35, label="Burn-in period")  # Cool Grey
+            plt.axvline(x=burnin-1, color='#373A36', linestyle=':')  # Cool Grey
+            if change:
+                plt.axvspan(burnin-1, n_sam_bef_cp, facecolor='#D4EFFC', alpha=0.5, label="In-control period")  # Light Blue
+                plt.axvline(x=n_sam_bef_cp, color='#DD2501', linestyle='--', label="Change Point")  # Red
+                plt.axvspan(n_sam_bef_cp, len(data)-1, facecolor='#66A40A', alpha=0.25, label="Out-of-control period")  # Light Grey
+            else:
+                plt.axvspan(burnin-1, len(data)-1, facecolor='#66A40A', alpha=0.25, label="Out-of-control period")  # Light Grey
+        else:
+            if change:
+                plt.axvspan(0, n_sam_bef_cp, facecolor='#D4EFFC', alpha=0.5, label="In-control period")  # Light Blue
+                plt.axvline(x=n_sam_bef_cp, color='#DD2501', linestyle='--', label="Change Point")  # Red
+                plt.axvspan(n_sam_bef_cp, len(data)-1, facecolor='#66A40A', alpha=0.25, label="Out-of-control period")  # Light Grey
+            else:
+                plt.axvspan(0, len(data)-1, facecolor='#66A40A', alpha=0.25, label="Out-of-control period")  # Light Grey
+        plt.title(f'Simulated Streaming Data with Changepoint', fontsize=20)
+        plt.xlabel('Index', fontsize=14)
+        plt.ylabel('Value', fontsize=14)
+        plt.legend(fontsize=15, loc='lower right')
+        if save:
+            if save_path is None:
+                save_path = os.path.join("Plots", f"changepoint_illustrate.pdf")
+            else:
+                save_path = os.path.join("Plots", save_path)
+            plt.tight_layout()
+            plt.savefig(save_path, dpi=dpi,format='pdf')
+        plt.show()
+
+n_sam_bef_cp = 400
+n_sam_aft_cp = 400
+gap_size = 5
+variance = 4
+data_plot = np.append(np.random.normal(size=n_sam_bef_cp, scale=np.sqrt(variance)), 
+                       np.random.normal(size=n_sam_aft_cp,loc=gap_size, scale=np.sqrt(variance)))
+plot_data(data_plot, 0, True, n_sam_bef_cp, True)
+# ------------------End-------------------
 
 
 # ------------------For the table content display in the thesis-------------------
 
 def compute_stats_CE(dataframe):
+    """
+    Helper function for changing the format of the C&E table to suite the thesis content
+    """
     # Get unique gap sizes
     gap_sizes = dataframe['Gap Size'].unique()
     # Create a list to hold dataframes for each gap size
@@ -84,16 +147,17 @@ beta = 1e-5
 outlier_ratio = 0.05
 asymmetric_ratio = 0.25
 # simulate_data_list = simulate_grid_data(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, SEED)
+# Without Outliers
 grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, 
                             seeds, BURNIN, cusum_params_list, ewma_params_list, z_list, alpha_list,
                              tm_params_list, wm_params_list, swm_params_list, ctm_params_list, 
                              None)
-
+# With Outliers
 grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances, 
                             seeds, BURNIN, cusum_params_list, ewma_params_list, z_list, alpha_list,
                              tm_params_list, wm_params_list, swm_params_list, ctm_params_list, 
                              outlier_position, beta, outlier_ratio, asymmetric_ratio)
-# rob_per_table, rob_per_summary = grideval.grid_robust_params_eval()
+# Run the function and plot the graph
 class_per_table, class_per_summary = grideval.grid_C_E_params_eval()
 grideval.plot_C_E_ARL0_graphs(save=True,each_G_V=False, all_CUSUM=False, all_EWMA=False,each_CUSUM=False,each_EWMA=False)
 
@@ -101,7 +165,6 @@ grideval.plot_C_E_ARL0_graphs(save=True,each_G_V=False, all_CUSUM=False, all_EWM
 class_per_table_var_1 = class_per_table[class_per_table["Data Var"] == variances[0]]
 class_per_table_var_4 = class_per_table[class_per_table["Data Var"] == variances[1]]
 class_per_table_var_9 = class_per_table[class_per_table["Data Var"] == variances[2]]
-
 
 df_var_1_table = compute_stats_CE(class_per_table_var_1)
 df_var_4_table = compute_stats_CE(class_per_table_var_4)
@@ -111,21 +174,24 @@ print(df_var_1_table.to_latex())
 print(df_var_4_table.to_latex())
 print(df_var_9_table.to_latex())
 
-#------------------------- For robust method ---------------------------
+#------------------------- For table of robust method ---------------------------
 robust_per_table, robust_per_summary = grideval.grid_robust_params_eval()
-robust_per_table.to_csv("robust_raw_result_new.csv", index=False)
-robust_per_summary.to_csv("robust_summary_result_new.csv", index=False)
+robust_per_table.to_csv("robust_raw_result_new.csv", index=False) # check the table 
+robust_per_summary.to_csv("robust_summary_result_new.csv", index=False) # check the table 
 
 # Extract z and alpha
 robust_per_table['z'] = robust_per_table['z and alpha'].str.extract('z:(\d+\.\d+)')[0].astype(float)
 robust_per_table['alpha'] = robust_per_table['z and alpha'].str.extract('alpha:(\d+(?:\.\d+)?)')[0].astype(float)
 
-# Generate table for thesis of different variance
+# Generate table for thesis of different variances
 robust_per_table_var_1 = robust_per_table[robust_per_table["Data Var"] == variances[0]]
 robust_per_table_var_4 = robust_per_table[robust_per_table["Data Var"] == variances[1]]
 robust_per_table_var_9 = robust_per_table[robust_per_table["Data Var"] == variances[2]]
 
 def compute_stats_robust(dataframe, z, alpha, outlier):
+    """
+    Helper function for changing the format of the robust table to suite the thesis content
+    """
     # Extract the data with the given z and alpa value
     dataframe = dataframe[(dataframe['z']==z) & (dataframe['alpha']==float(alpha))]
     # Get unique gap sizes
@@ -157,6 +223,8 @@ def compute_stats_robust(dataframe, z, alpha, outlier):
     final_df = final_df.round(1)
     return final_df
 
+# Print the tables
+
 df_rob_z164_a095_var_4_table = compute_stats_robust(robust_per_table_var_4, z_list[0], alpha_list[1], True)
 df_rob_z164_a095_var_1_table = compute_stats_robust(robust_per_table_var_1, z_list[0], alpha_list[1], True)
 df_rob_z164_a095_var_9_table = compute_stats_robust(robust_per_table_var_9, z_list[0], alpha_list[1], True)
@@ -185,14 +253,16 @@ print(df_rob_z257_a2_var_1_table.to_latex())
 print(df_rob_z257_a2_var_4_table.to_latex())
 print(df_rob_z257_a2_var_9_table.to_latex())
 
-grideval.plot_robust_ARL0_graphs(save=True,each_G_V=False, all_Methods=False, each_Method=False)
-grideval.plot_robust_ARL1_graphs(save=True,each_G_V=False, all_Methods=False, each_Method=False)
+# Print the graphs
+grideval.plot_robust_ARL0_graphs(save=True,each_G=False, each_G_V=False, each_Method=False)
+grideval.plot_robust_ARL1_graphs(save=True,each_G=False, each_G_V=False, each_Method=False)
 
 grideval.plot_robust_ARL0_graphs(save=True)
 grideval.plot_robust_ARL1_graphs(save=True)
+# ------------------End-------------------
 
 
-# ------------------Plot for the robust methods to better illustrate the idea-------------------
+# ------------------Plot the robust methods to better illustrate the idea within thesis-------------------
 
 n_sam_bef_cp = 15
 n_sam_aft_cp = 15
@@ -267,8 +337,10 @@ plt.legend(loc='upper left', fontsize=15)
 plt.tight_layout()
 plt.savefig("Plots/compare_robust_mean.pdf", format='pdf', dpi=500)
 plt.show()
+# ------------------End-------------------
 
 
+# ------------------Plot the cosine taper mean window function to better illustrate the idea within thesis-------------------
 
 from scipy import signal
 window = signal.windows.tukey(30, alpha=0.4)
@@ -282,6 +354,7 @@ plt.ylim([0, 1.1])
 plt.tight_layout()
 plt.savefig("Plots/cosine_tapered_mean_weights.pdf", format='pdf', dpi=500)
 plt.show()
+# ------------------End-------------------
 
 
 
@@ -318,8 +391,10 @@ grideval = GridDataEvaluate(n_sam_bef_cp, n_sam_aft_cp, gap_sizes, variances,
                              None)
 rob_per_table, rob_per_summary = grideval.grid_robust_params_eval()
 class_per_table, class_per_summary = grideval.grid_C_E_params_eval()
+# ------------------End-------------------
 
-# -------------------- For the table in thesis -----------------------
+
+# -------------------- For the table in thesis v1.0-----------------------
 # Generate table for thesis
 class_per_table_var_1 = class_per_table[class_per_table["Data Var"] == variances[0]]
 class_per_table_var_4 = class_per_table[class_per_table["Data Var"] == variances[1]]
@@ -356,6 +431,7 @@ df_var_9_table = compute_stats(class_per_table_var_9)
 print(df_var_1_table.to_latex())
 print(df_var_4_table.to_latex())
 print(df_var_9_table.to_latex())
+# ------------------End-------------------
 
 
 
@@ -389,6 +465,9 @@ plt.title(f'$ARL_0$ Values of TM Model in Streaming Data Without Outliers', font
 plt.ylabel('$ARL_0$', fontsize=14)
 plt.xlabel('Gap Size', fontsize=14)
 plt.show()
+# ------------------End-------------------
+
+
 # ------------------Testing function for the arl_robust_mean function-------------------
 burnin = 50
 window_length = 25
@@ -426,6 +505,7 @@ out_data = outinj.insert_outliers()
 robust_arl_results_out = arl_robust_mean(out_data, burnin, window_length, trimmed_ratio, winsorized_ratio,
                                      cosine_ratio, trimmed_window_length, winsorized_window_length,
                                      cosine_window_length, z_val, alpha_val, n_sam_bef_cp)
+# ------------------End-------------------
 
 
 # ------------------Testing function for the new ControlChart class with robust method-------------------
@@ -475,6 +555,8 @@ wm_CI_s, wm_CI_t, wm_CI_au, wm_CI_al = robust_method_control_chart.winsorized_me
 wm_CI_ind = robust_method_control_chart.winsorized_mean_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1)
 cpm_CI_s, cpm_CI_t, cpm_CI_au, cpm_CI_al = robust_method_control_chart.cosine_tapered_mean_CI_val(z_val=z_val, h_val=h_val, mu=0, sigma=1)
 cpm_CI_ind = robust_method_control_chart.cosine_tapered_mean_CI_detect(z_val=z_val, h_val=h_val, mu=0, sigma=1)
+# ------------------End-------------------
+
 
 
 # ------------------Testing function for RobustMethods class-------------------
@@ -528,6 +610,7 @@ robust_var_seq = robust_method.compute_variance_sequence(winsorized_ratio=0.2)
 mad_sd_seq = robust_var_seq['mad'] * 1.4826
 iqr_sd_seq = robust_var_seq['iqr'] * 0.7413
 winsorized_var = robust_var_seq['winsorized']
+# ------------------End-------------------
 
 
 # ------------------Testing function for grid_params_eval function without outlier-------------------
