@@ -11,8 +11,9 @@ from itertools import product
 
 class GridDataEvaluate:
     """
-    A class to evaluate the performance of the CUSUM and EWMA models in the context of change point detection.
+    A class to evaluate the performance of all models in the context of change point detection.
     The class uses grid parameters to simulate data and calculate the Average Run Length (ARL).
+    The functions to plot and compare their performance are also included.
     
     Attributes:
         n_sam_bef_cp (int): Number of samples before the change point.

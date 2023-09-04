@@ -8,7 +8,7 @@ from collections import deque
 
 class ControlChart:
     """
-    This class encapsulates a set of control chart methods used to detect changes in streaming data. These methods include both traditional and robust methods: the Cumulative Sum (CUSUM) control chart, the Exponentially Weighted Moving Average (EWMA) control chart, and robust methods that use a sequence of means calculated with the trimmed mean, winsorized mean, and cosine-tapered mean.
+    This class encapsulates a set of control chart methods used to detect changes in streaming data. These methods include both traditional and robust methods: the Cumulative Sum (CUSUM) control chart, the Exponentially Weighted Moving Average (EWMA) control chart, and robust methods that use a sequence of means calculated with the trimmed mean, winsorized mean, cosine-tapered mean, and median.
 
     Attributes:
         x (np.ndarray): The input streaming data. It's a fixed dataset, but the values are coming in a stream.
