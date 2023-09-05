@@ -1,4 +1,4 @@
-# MSc Thesis: Changepoint Detection in Streaming Data: Novel Robust Methods for Singular Outliers Mitigation
+# MSc Thesis: Changepoint Detection in Streaming Data: Novel Robust Methods for Singular Outlier Mitigation
 
 ## Introduction
 The main objective of this thesis is to introduce novel, robust methods designed to effectively mitigate the influence caused by the occurrence of outliers when detecting changepoints in streaming data. This work explores classical methods such as EWMA and CUSUM, analysing their performance, especially when the outliers are introduced. Subsequently, the newly proposed robust methods based on robust mean estimator (Trimmed Mean, Winsorised Mean, Cosine Taper Mean, Median) and a sliding window for changepoint detection are discussed. These methods are compared with the classical methods using the same experimental settings on simulated datasets. This repository contains all the code utilised within the thesis.
